@@ -1,0 +1,59 @@
+{
+	"name": "n8n-nodes-siteshot",
+	"version": "0.1.0",
+	"description": "n8n community node that captures a screenshot of a public web page with the Site-Shot API and returns it as binary data.",
+	"license": "MIT",
+	"homepage": "https://www.site-shot.com/",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/site-shot/n8n-nodes-siteshot-public.git"
+	},
+	"bugs": {
+		"url": "https://github.com/site-shot/n8n-nodes-siteshot-public/issues"
+	},
+	"keywords": [
+		"n8n-community-node-package",
+		"n8n",
+		"screenshot",
+		"site-shot"
+	],
+	"author": {
+		"name": "Alexey Kazandaev",
+		"email": "alexey@kazandaev.ru"
+	},
+	"engines": {
+		"node": ">=20.19"
+	},
+	"scripts": {
+		"build": "n8n-node build",
+		"dev": "n8n-node dev",
+		"lint": "n8n-node lint",
+		"lint:fix": "n8n-node lint --fix",
+		"typecheck": "tsc --noEmit",
+		"test": "node --test test/*.test.mjs",
+		"verify": "npm run typecheck && npm run build && npm test && npm run lint",
+		"prepublishOnly": "n8n-node prerelease"
+	},
+	"files": [
+		"dist"
+	],
+	"n8n": {
+		"n8nNodesApiVersion": 1,
+		"strict": true,
+		"credentials": [
+			"dist/credentials/SiteShotApi.credentials.js"
+		],
+		"nodes": [
+			"dist/nodes/SiteShot/SiteShot.node.js"
+		]
+	},
+	"devDependencies": {
+		"@n8n/node-cli": "0.48.6",
+		"eslint": "9.39.4",
+		"prettier": "3.8.3",
+		"typescript": "5.9.3"
+	},
+	"peerDependencies": {
+		"n8n-workflow": "*"
+	}
+}

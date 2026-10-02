@@ -1,0 +1,44 @@
+# Verification only. The token can read the repository and nothing else, no
+# registry is configured and no step can publish. Staging a release is the
+# separate, manual stage.yml, for the release-ready manifest in package.json
+# (see Release in the README).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+
+      # The current Node 24 LTS and the npm it ships, the same pair the stage
+      # workflow uses; both versions are checked, not assumed.
+      - name: Check the toolchain
+        run: |
+          node --version
+          npm --version
+          test "$(node --version)" = v24.21.0
+          test "$(npm --version)" = 11.19.0
+
+      - name: Clean install
+        run: npm ci
+      # Typecheck, build, the full test suite (including the packed-file and
+      # source-map checks) and the official n8n linter.
+      - name: Verify
+        run: npm run verify
