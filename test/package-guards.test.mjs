@@ -175,6 +175,37 @@ test('the package metadata matches the community-node conventions', () => {
 	assert.equal(pkg.license, 'MIT');
 });
 
+// The categories n8n accepts in a community node's codex file: the list of the
+// official valid-node-categories rule (@n8n/eslint-plugin-community-nodes 0.35.0,
+// which n8n's community package scanner runs) and of n8n's codex-file reference.
+// The locked lint toolchain predates that rule and lints no .node.json file, so
+// the codex is held to the list here.
+const COMMUNITY_NODE_CATEGORIES = new Set([
+	'Data & Storage',
+	'Finance & Accounting',
+	'Marketing & Content',
+	'Productivity',
+	'Miscellaneous',
+	'Sales',
+	'Development',
+	'Analytics',
+	'Communication',
+	'Utility',
+]);
+
+const unsupportedCategories = (categories) =>
+	categories.filter((category) => !COMMUNITY_NODE_CATEGORIES.has(category));
+
+test('the node codex lists only a category n8n accepts for a community node', () => {
+	const { categories } = readJson('nodes/SiteShot/SiteShot.node.json');
+	assert.deepEqual(categories, ['Development']);
+	assert.deepEqual(unsupportedCategories(categories), []);
+	// 0.1.0 also listed "Developer Tools", which the scanner rejected; the check
+	// rejects it too, and matches whole names only.
+	assert.deepEqual(unsupportedCategories(['Development', 'Developer Tools']), ['Developer Tools']);
+	assert.deepEqual(unsupportedCategories(['Marketing']), ['Marketing']);
+});
+
 test('no lifecycle script can run on install or rewrite the tarball as it is packed', () => {
 	assertNoLifecycleScripts(pkg);
 });

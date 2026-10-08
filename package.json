@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-siteshot",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "n8n community node that captures a screenshot of a public web page with the Site-Shot API and returns it as binary data.",
 	"license": "MIT",
 	"homepage": "https://www.site-shot.com/",

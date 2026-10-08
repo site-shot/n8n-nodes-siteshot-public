@@ -264,6 +264,14 @@ runs only lint and build.
 Publishing to npm is not n8n verification. Submitting the node to n8n for
 verification is a later, separate step.
 
+## Version history
+
+- **0.1.1:** the node's codex file (`SiteShot.node.json`) lists only the
+  `Development` category. 0.1.0 also listed `Developer Tools`, which is not a
+  category n8n accepts for a community node. The node's code, credential and
+  requests are unchanged.
+- **0.1.0:** the first version.
+
 ## Support
 
 - Problems with this node: [GitHub issues](https://github.com/site-shot/n8n-nodes-siteshot-public/issues).
