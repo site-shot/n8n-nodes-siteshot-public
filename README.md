@@ -261,8 +261,12 @@ verification, packed files and the given SHA-256 are the release gate. The
 official `n8n-node release` command is not used: it publishes directly, and it
 runs only lint and build.
 
-Publishing to npm is not n8n verification. Submitting the node to n8n for
-verification is a later, separate step.
+Publishing to npm is separate from n8n verification. Site-Shot is now
+[listed as a verified integration by n8n](https://n8n.io/integrations/site-shot/).
+Instance owners and admins can use
+[n8n's verified-node installation guide](https://docs.n8n.io/integrations/community-nodes/installation-and-management/install-verified-community-nodes/).
+This project's documented runtime tests remain self-hosted; a verified listing
+is not an independent n8n Cloud execution test.
 
 ## Version history
 
