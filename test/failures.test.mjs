@@ -104,6 +104,47 @@ test('a rejected API key and an inactive subscription are reported differently',
 	assert.equal(billingError.httpCode, '403');
 });
 
+test('a used-up free API trial is reported as such, not as a rejected key', async () => {
+	const ctx = createExecuteContext({
+		params: baseParams,
+		transport: fullResponse(
+			{
+				message:
+					'Free API trial used up: 100 captures this month. It renews on 2026-11-30 (UTC). For more, choose a plan: https://www.site-shot.com/pricing/',
+			},
+			403,
+		),
+	});
+
+	const err = await capture(ctx);
+
+	assert.equal(ctx.httpCalls.length, 1, 'a refused capture must not be retried');
+	assert.equal(ctx.binaryCalls.length, 0);
+	assert.equal(err.constructor.name, 'NodeApiError');
+	assert.equal(err.httpCode, '403');
+	assert.ok(/free API trial/i.test(err.message), err.message);
+	assert.ok(!/API key/i.test(err.message), err.message);
+	assert.ok(err.message.includes('It renews on 2026-11-30 (UTC).'), err.message);
+	const serialized = serializeError(err);
+	assert.ok(!/100 captures|For more, choose a plan:/.test(serialized), 'upstream wording past the prefix leaked');
+});
+
+test('a refused target address is reported as such, not as billing or a rejected key', async () => {
+	const ctx = createExecuteContext({
+		params: baseParams,
+		transport: fullResponse({ error: 'Forbidden target address' }, 403),
+	});
+
+	const err = await capture(ctx);
+
+	assert.equal(ctx.httpCalls.length, 1, 'a refused capture must not be retried');
+	assert.equal(ctx.binaryCalls.length, 0);
+	assert.equal(err.constructor.name, 'NodeApiError');
+	assert.equal(err.httpCode, '403');
+	assert.ok(/does not capture this address/i.test(err.message), err.message);
+	assert.ok(!/subscription|trial|API key/i.test(err.message), err.message);
+});
+
 test('quota, upstream and unexpected-response failures each surface their status', async () => {
 	const cases = [
 		{ response: fullResponse({ message: 'API rate limit exceeded' }, 429), httpCode: '429' },

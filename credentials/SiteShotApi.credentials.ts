@@ -73,7 +73,7 @@ export class SiteShotApi implements ICredentialType {
 			required: true,
 			default: '',
 			description:
-				'Your Site-Shot API key. Site-Shot sends it as the <code>userkey</code> query parameter. A paid plan is required; there is no free API tier.',
+				"Your Site-Shot API key. Site-Shot sends it as the <code>userkey</code> query parameter. A confirmed account's API key comes with a free API trial of 100 captures a month, no card needed; paid plans from $5/mo for 2,000 add volume.",
 		},
 	];
 
@@ -139,13 +139,15 @@ export class SiteShotApi implements ICredentialType {
 		},
 		rules: [
 			{
-				// A valid key on a lapsed plan: the key itself is fine, and saying
-				// otherwise would send the user to fix the wrong thing.
+				// A valid key on a lapsed plan, or on a free API trial whose
+				// captures for the month are used up: the key itself is fine, and
+				// saying otherwise would send the user to fix the wrong thing. One
+				// fixed message covers both, because this rule cannot read the body.
 				type: 'responseCode',
 				properties: {
 					value: 403,
 					message:
-						'The API key is valid, but the Site-Shot account has no active subscription.',
+						'The API key is valid, but the Site-Shot account has no active subscription, or its free API trial captures for this month are used up.',
 				},
 			},
 		],

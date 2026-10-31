@@ -19,9 +19,13 @@ include the Site-Shot SDK.
 
 - Self-hosted n8n with community nodes enabled. Only n8n 2.40.5 has been tested;
   see [Compatibility](#compatibility).
-- A **paid** Site-Shot API plan. As the
-  [Site-Shot quickstart](https://www.site-shot.com/start/) puts it, "There are
-  no free API credits". Plans and prices are listed there.
+- A Site-Shot API key, from the
+  [Site-Shot quickstart](https://www.site-shot.com/start/). A confirmed
+  account's API key comes with a free API trial of 100 captures a month, no
+  card needed (an account confirmed before 2026-10-30 starts it on the
+  quickstart page; an account that has had a paid plan before does not get it);
+  [paid plans](https://www.site-shot.com/pricing/) from $5/mo for 2,000 add
+  volume.
 
 ## Installation
 
@@ -49,7 +53,7 @@ own code never reads it.
 | --- | --- |
 | success | The key was accepted. |
 | `401` | The key is missing or not recognised. |
-| `403` | The key is valid, but the account has no active subscription. |
+| `403` | The key is valid, but the account has no active subscription, or its free API trial captures for this month are used up. |
 
 ### The credential test and your quota
 
@@ -138,7 +142,10 @@ responses that are not the expected JSON.
 | Situation | What the node reports |
 | --- | --- |
 | HTTP 401 | The API key was rejected. |
-| HTTP 403 | The account has no active subscription; the key itself is fine. |
+| HTTP 403, `No active subscription found` | The account has no active subscription; the key itself is fine. |
+| HTTP 403, `Free API trial used up` | This month's free API trial captures are used up, with the date the trial renews when the API gives one; the key itself is fine. |
+| HTTP 403, `Forbidden target address` | Site-Shot does not capture this address, for example one on a private or local network. |
+| Any other HTTP 403 | Site-Shot refused the capture: the account may have no active subscription or its free API trial captures may be used up, or the address may not be allowed. |
 | HTTP 402 or 429, or a quota failure | A quota or payment problem. |
 | `country_unavailable` | No capacity in the requested country right now. |
 | HTTP 5xx | The API is unavailable. |
@@ -146,10 +153,12 @@ responses that are not the expected JSON.
 | Invalid URL or viewport | Rejected before any request is sent. |
 
 Error messages are written by this node. They include the HTTP status, and
-upstream wording only when it matches a short list of known reasons; they never
-include the API key, the request address, headers or response bodies. The node
-writes no logs. With **Continue On Fail** enabled, a failed item keeps its input
-JSON and pairing, gains an `error` message and has no binary field.
+upstream wording only when it matches a short list of known reasons (plus a
+used-up trial's renewal date, when it has the exact `YYYY-MM-DD (UTC)` form);
+they never include the API key, the request address, headers or response
+bodies. The node writes no logs. With **Continue On Fail** enabled, a failed
+item keeps its input JSON and pairing, gains an `error` message and has no
+binary field.
 
 Limits, fixed in this version:
 

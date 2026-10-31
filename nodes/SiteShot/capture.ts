@@ -8,7 +8,8 @@
  *
  * Redaction rule enforced throughout: a failure carries a fixed, safe message
  * of our own plus the HTTP status. Upstream text is echoed only when it is an
- * exact match for a reason proven by the published API contract.
+ * exact match for a reason proven by the published API contract, or when it is
+ * a date that a strict pattern has matched (a free API trial's renewal date).
  */
 
 /** The single supported endpoint. Deliberately not configurable. */
@@ -74,6 +75,8 @@ export type CaptureFailureReason =
 	| 'invalid_options'
 	| 'invalid_api_key'
 	| 'subscription_inactive'
+	| 'access_refused'
+	| 'target_not_allowed'
 	| 'quota_or_payment'
 	| 'country_unavailable'
 	| 'invalid_parameters'
@@ -129,6 +132,26 @@ const ALLOWED_UPSTREAM_REASONS = new Set([
 	'no api key found in request',
 	'no active subscription found',
 ]);
+
+/**
+ * Start of the 403 message the API sends once a free API trial's captures for
+ * the month are spent, e.g. "Free API trial used up: 100 captures this month.
+ * It renews on 2026-11-30 (UTC). For more, choose a plan: <pricing URL>". The
+ * fixed prefix is matched and echoed, and the renewal date only when
+ * TRIAL_RENEWS_ON matches it exactly; the count, the link and any other text
+ * never are.
+ */
+const TRIAL_USED_UP_PREFIX = 'free api trial used up';
+
+/** The renewal date inside a used-up trial's message, matched strictly. */
+const TRIAL_RENEWS_ON = /renews on (\d{4}-\d{2}-\d{2}) \(UTC\)/;
+
+/**
+ * Start of the 403 error the API sends when it will not capture the requested
+ * address at all, e.g. one on a private or local network. Not a billing
+ * refusal. Only this fixed prefix is matched and echoed.
+ */
+const TARGET_NOT_ALLOWED_PREFIX = 'forbidden target address';
 
 
 /**
@@ -238,10 +261,13 @@ export function buildCaptureQuery(
  * Map a status plus an upstream reason onto a safe, actionable failure.
  *
  * Mirrors site-shot-sdk's taxonomy, with its two load-bearing distinctions
- * preserved: 401 means the key was rejected, 403 means the subscription is
- * inactive, and the word "forbidden" in an upstream capture error is never
- * read as a key problem (a failing target page reports its own status line
- * verbatim, so `error` can read "403 Forbidden" on an otherwise-200 response).
+ * preserved: 401 means the key was rejected while 403 never blames the key,
+ * and the word "forbidden" in an upstream capture error is never read as a key
+ * problem (a failing target page reports its own status line verbatim, so
+ * `error` can read "403 Forbidden" on an otherwise-200 response). A 403 is
+ * named as no active subscription, a used-up free API trial or a refused
+ * address only when the upstream message says which; otherwise it is reported
+ * neutrally, without blaming billing.
  */
 function classifyFailure(statusCode: number, upstreamReason?: string): CaptureFailure {
 	const lower = (upstreamReason ?? '').toLowerCase().trim();
@@ -256,22 +282,58 @@ function classifyFailure(statusCode: number, upstreamReason?: string): CaptureFa
 		);
 	}
 
+	if (lower.startsWith(TARGET_NOT_ALLOWED_PREFIX)) {
+		return new CaptureFailure(
+			'target_not_allowed',
+			`Site-Shot does not capture this address (${TARGET_NOT_ALLOWED_PREFIX}).`,
+			{
+				httpCode,
+				description:
+					'The API refuses some addresses, such as those on private or local networks. Use the address of a public web page.',
+			},
+		);
+	}
+
 	if (statusCode === 401 || /userkey|api.?key|invalid key|unauthoriz|authenticat/.test(lower)) {
 		return new CaptureFailure('invalid_api_key', `Site-Shot rejected the API key${echo}.`, {
 			httpCode,
 			description:
-				'Check the API key on the Site-Shot credential. Keys are issued at https://www.site-shot.com/pricing/.',
+				'Check the API key on the Site-Shot credential. Your key is shown at https://www.site-shot.com/start/.',
 		});
 	}
 
 	if (statusCode === 403) {
+		// The wording names the cause only when the upstream message says
+		// which one it was.
+		const blocked = (message: string, description: string) =>
+			new CaptureFailure('subscription_inactive', message, { httpCode, description });
+
+		if (lower.startsWith(TRIAL_USED_UP_PREFIX)) {
+			const renewsOn = TRIAL_RENEWS_ON.exec(upstreamReason ?? '')?.[1];
+			const usedUp = `The Site-Shot account's free API trial is used up for this month (${TRIAL_USED_UP_PREFIX}).`;
+			return renewsOn
+				? blocked(
+						`${usedUp} It renews on ${renewsOn} (UTC).`,
+						'The key itself is valid. For more captures, choose a plan at https://www.site-shot.com/pricing/.',
+					)
+				: blocked(
+						usedUp,
+						'The key itself is valid. The trial renews monthly; for more captures, choose a plan at https://www.site-shot.com/pricing/.',
+					);
+		}
+		if (lower === 'no active subscription found') {
+			return blocked(
+				`The Site-Shot account has no active subscription${echo}.`,
+				'The key itself is valid. If the account has never had a plan, start the free API trial at https://www.site-shot.com/start/; otherwise choose a plan at https://www.site-shot.com/pricing/.',
+			);
+		}
 		return new CaptureFailure(
-			'subscription_inactive',
-			`The Site-Shot account has no active subscription${echo}.`,
+			'access_refused',
+			'Site-Shot refused the capture (HTTP 403): the account may have no active subscription or its free API trial captures may be used up, or the address may not be allowed.',
 			{
 				httpCode,
 				description:
-					'The key itself is valid. Reactivate the plan at https://www.site-shot.com/pricing/.',
+					'Check the Site-Shot account at https://www.site-shot.com/start/, and that the URL is the address of a public web page.',
 			},
 		);
 	}

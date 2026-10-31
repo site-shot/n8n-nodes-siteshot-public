@@ -146,7 +146,88 @@ test('HTTP 403 is an inactive subscription, distinct from a rejected key', () =>
 		extractCaptureImage({ statusCode: 403, body: { message: 'No active subscription found' } }),
 	);
 	assert.ok(!/API key/i.test(err.message), err.message);
-	failsWith('subscription_inactive', () => extractCaptureImage({ statusCode: 403, body: {} }));
+	const unexplained = failsWith('access_refused', () =>
+		extractCaptureImage({ statusCode: 403, body: {} }),
+	);
+	assert.ok(!/API key/i.test(unexplained.message), unexplained.message);
+});
+
+/** The 403 body the API sends once a free API trial's month is spent. */
+const TRIAL_USED_UP =
+	'Free API trial used up: 100 captures this month. It renews on 2026-11-30 (UTC). For more, choose a plan: https://www.site-shot.com/pricing/';
+
+test('HTTP 403 for a used-up free API trial says so, and is not a rejected key', () => {
+	const err = failsWith('subscription_inactive', () =>
+		extractCaptureImage({ statusCode: 403, body: { message: TRIAL_USED_UP } }),
+	);
+	assert.equal(err.httpCode, '403');
+	assert.ok(/free API trial/i.test(err.message), err.message);
+	assert.ok(!/subscription/i.test(err.message), err.message);
+	assert.ok(!/API key/i.test(err.message), err.message);
+	assert.ok(/key itself is valid/i.test(err.description), err.description);
+	// The strictly matched renewal date is passed on; the count and the
+	// upstream link are not.
+	assert.ok(err.message.endsWith('It renews on 2026-11-30 (UTC).'), err.message);
+	assert.ok(!/renews monthly/i.test(err.description), err.description);
+	assert.ok(!/100 captures|For more, choose a plan:/.test(err.message + err.description), err.message);
+});
+
+test('a used-up free API trial without a well-formed renewal date says it renews monthly', () => {
+	for (const message of [
+		'Free API trial used up: 100 captures this month.',
+		'Free API trial used up: 100 captures this month. It renews on 30.11.2026 (UTC).',
+		'Free API trial used up. It renews on 2026-11-30T00:00 (UTC).',
+		'Free API trial used up. It renews on 2026-11-30 <b>soon</b>.',
+	]) {
+		const err = failsWith('subscription_inactive', () =>
+			extractCaptureImage({ statusCode: 403, body: { message } }),
+		);
+		assert.ok(/free API trial is used up/i.test(err.message), err.message);
+		assert.ok(!/renews on/i.test(err.message), err.message);
+		assert.ok(/renews monthly/i.test(err.description), err.description);
+		assert.ok(!/2026|30\.11|100 captures|<b>/.test(err.message + err.description), err.message);
+	}
+});
+
+test('an unexplained HTTP 403 is reported neutrally, without blaming billing or the key', () => {
+	for (const body of [{}, { message: 'Forbidden' }, { error: 'subscription' }]) {
+		const err = failsWith('access_refused', () => extractCaptureImage({ statusCode: 403, body }));
+		assert.equal(err.httpCode, '403');
+		assert.equal(
+			err.message,
+			'Site-Shot refused the capture (HTTP 403): the account may have no active subscription or its free API trial captures may be used up, or the address may not be allowed.',
+		);
+		assert.ok(!/API key/i.test(err.message), err.message);
+		// It may be the address rather than billing, so it does not send the
+		// user to buy a plan.
+		assert.ok(!/pricing|choose a plan|buy/i.test(err.description), err.description);
+	}
+});
+
+test('a refused target address is its own failure, not a billing or key problem', () => {
+	for (const body of [
+		{ error: 'Forbidden target address' },
+		{ message: 'Forbidden target address' },
+		{ error: 'FORBIDDEN TARGET ADDRESS: 10.1.2.3' },
+	]) {
+		const err = failsWith('target_not_allowed', () =>
+			extractCaptureImage({ statusCode: 403, body }),
+		);
+		assert.equal(err.httpCode, '403');
+		assert.ok(/does not capture this address/i.test(err.message), err.message);
+		const text = `${err.message} ${err.description}`;
+		assert.ok(!/subscription|trial|plan|pricing|API key/i.test(text), text);
+		// Only the fixed prefix is echoed.
+		assert.ok(!text.includes('10.1.2.3'), text);
+	}
+});
+
+test('a known "no active subscription" 403 does not blame the free API trial', () => {
+	const err = failsWith('subscription_inactive', () =>
+		extractCaptureImage({ statusCode: 403, body: { message: 'No active subscription found' } }),
+	);
+	assert.ok(!/trial/i.test(err.message), err.message);
+	assert.ok(!/reactivate/i.test(err.description), err.description);
 });
 
 test('HTTP 402 and 429 are quota or payment failures', () => {
