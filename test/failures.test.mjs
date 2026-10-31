@@ -104,29 +104,33 @@ test('a rejected API key and an inactive subscription are reported differently',
 	assert.equal(billingError.httpCode, '403');
 });
 
-test('a used-up free API trial is reported as such, not as a rejected key', async () => {
-	const ctx = createExecuteContext({
-		params: baseParams,
-		transport: fullResponse(
-			{
-				message:
-					'Free API trial used up: 100 captures this month. It renews on 2026-11-30 (UTC). For more, choose a plan: https://www.site-shot.com/pricing/',
-			},
-			403,
-		),
-	});
+test('a used-up free plan is reported as such, in either wording, not as a rejected key', async () => {
+	for (const message of [
+		'Free plan used up: 100 captures this month. It renews on 2026-11-30 (UTC). For more, choose a paid plan: https://www.site-shot.com/pricing/',
+		// The API may use either wording; today it sends this one.
+		'Free API trial used up: 100 captures this month. It renews on 2026-11-30 (UTC). For more, choose a plan: https://www.site-shot.com/pricing/',
+	]) {
+		const ctx = createExecuteContext({
+			params: baseParams,
+			transport: fullResponse({ message }, 403),
+		});
 
-	const err = await capture(ctx);
+		const err = await capture(ctx);
 
-	assert.equal(ctx.httpCalls.length, 1, 'a refused capture must not be retried');
-	assert.equal(ctx.binaryCalls.length, 0);
-	assert.equal(err.constructor.name, 'NodeApiError');
-	assert.equal(err.httpCode, '403');
-	assert.ok(/free API trial/i.test(err.message), err.message);
-	assert.ok(!/API key/i.test(err.message), err.message);
-	assert.ok(err.message.includes('It renews on 2026-11-30 (UTC).'), err.message);
-	const serialized = serializeError(err);
-	assert.ok(!/100 captures|For more, choose a plan:/.test(serialized), 'upstream wording past the prefix leaked');
+		assert.equal(ctx.httpCalls.length, 1, 'a refused capture must not be retried');
+		assert.equal(ctx.binaryCalls.length, 0);
+		assert.equal(err.constructor.name, 'NodeApiError');
+		assert.equal(err.httpCode, '403');
+		assert.ok(/free plan is used up for this month/i.test(err.message), err.message);
+		assert.ok(!/API key/i.test(err.message), err.message);
+		assert.ok(err.message.includes('It renews on 2026-11-30 (UTC).'), err.message);
+		assert.ok(/choose a paid plan/.test(err.description), err.description);
+		const serialized = serializeError(err);
+		assert.ok(
+			!/100 captures|For more, choose a (paid )?plan:/.test(serialized),
+			'upstream wording past the prefix leaked',
+		);
+	}
 });
 
 test('a refused target address is reported as such, not as billing or a rejected key', async () => {
@@ -143,6 +147,31 @@ test('a refused target address is reported as such, not as billing or a rejected
 	assert.equal(err.httpCode, '403');
 	assert.ok(/does not capture this address/i.test(err.message), err.message);
 	assert.ok(!/subscription|trial|API key/i.test(err.message), err.message);
+});
+
+test('a country refused on the free plan (HTTP 200, error, no image) says a paid plan is needed', async () => {
+	const ctx = createExecuteContext({
+		params: baseParams,
+		transport: fullResponse(
+			{
+				error:
+					'Geotargeting needs a paid plan: the free plan captures from the default location or the US. Plans: https://www.site-shot.com/pricing/',
+			},
+			200,
+		),
+	});
+
+	const err = await capture(ctx);
+
+	assert.equal(ctx.httpCalls.length, 1, 'a refused capture must not be retried');
+	assert.equal(ctx.binaryCalls.length, 0);
+	assert.equal(err.constructor.name, 'NodeApiError');
+	assert.equal(err.httpCode, '200');
+	assert.ok(/country other than the US needs a paid plan/.test(err.message), err.message);
+	assert.ok(!/could not capture the page|API key|subscription/i.test(err.message), err.message);
+	assert.ok(/still counts toward the month's 100/.test(err.description), err.description);
+	assert.ok(err.description.includes('https://www.site-shot.com/pricing/'), err.description);
+	assert.ok(!/default location/.test(serializeError(err)), 'upstream wording past the prefix leaked');
 });
 
 test('quota, upstream and unexpected-response failures each surface their status', async () => {

@@ -9,7 +9,7 @@
  * Redaction rule enforced throughout: a failure carries a fixed, safe message
  * of our own plus the HTTP status. Upstream text is echoed only when it is an
  * exact match for a reason proven by the published API contract, or when it is
- * a date that a strict pattern has matched (a free API trial's renewal date).
+ * a date that a strict pattern has matched (the free plan's renewal date).
  */
 
 /** The single supported endpoint. Deliberately not configurable. */
@@ -77,6 +77,7 @@ export type CaptureFailureReason =
 	| 'subscription_inactive'
 	| 'access_refused'
 	| 'target_not_allowed'
+	| 'country_needs_paid_plan'
 	| 'quota_or_payment'
 	| 'country_unavailable'
 	| 'invalid_parameters'
@@ -134,17 +135,19 @@ const ALLOWED_UPSTREAM_REASONS = new Set([
 ]);
 
 /**
- * Start of the 403 message the API sends once a free API trial's captures for
- * the month are spent, e.g. "Free API trial used up: 100 captures this month.
- * It renews on 2026-11-30 (UTC). For more, choose a plan: <pricing URL>". The
- * fixed prefix is matched and echoed, and the renewal date only when
- * TRIAL_RENEWS_ON matches it exactly; the count, the link and any other text
- * never are.
+ * Starts of the 403 message the API sends once the free plan's captures for
+ * the month are spent, e.g. "Free plan used up: 100 captures this month. It
+ * renews on 2026-11-30 (UTC). For more, choose a paid plan: <pricing URL>".
+ * The API may use either wording: today it sends "Free API trial used up:
+ * ...", and it may send "Free plan used up: ..." instead, so both starts are
+ * matched, case-insensitively. The matched start is echoed, and the renewal
+ * date only when FREE_PLAN_RENEWS_ON matches it exactly; the count, the link
+ * and any other text never are.
  */
-const TRIAL_USED_UP_PREFIX = 'free api trial used up';
+const FREE_PLAN_USED_UP_PREFIXES = ['free plan used up', 'free api trial used up'];
 
-/** The renewal date inside a used-up trial's message, matched strictly. */
-const TRIAL_RENEWS_ON = /renews on (\d{4}-\d{2}-\d{2}) \(UTC\)/;
+/** The renewal date inside a used-up free plan's message, matched strictly. */
+const FREE_PLAN_RENEWS_ON = /renews on (\d{4}-\d{2}-\d{2}) \(UTC\)/;
 
 /**
  * Start of the 403 error the API sends when it will not capture the requested
@@ -152,6 +155,15 @@ const TRIAL_RENEWS_ON = /renews on (\d{4}-\d{2}-\d{2}) \(UTC\)/;
  * refusal. Only this fixed prefix is matched and echoed.
  */
 const TARGET_NOT_ALLOWED_PREFIX = 'forbidden target address';
+
+/**
+ * Start of the error the API sends when the free plan asks for a country
+ * other than the US, e.g. "Geotargeting needs a paid plan: ... Plans: <pricing
+ * URL>". In JSON mode it arrives as HTTP 200 with this text in `error` and no
+ * image; in image mode as a 403. Only this fixed prefix is matched and
+ * echoed: the rest of the sentence is not stable.
+ */
+const COUNTRY_NEEDS_PAID_PLAN_PREFIX = 'geotargeting needs a paid plan';
 
 
 /**
@@ -265,9 +277,11 @@ export function buildCaptureQuery(
  * and the word "forbidden" in an upstream capture error is never read as a key
  * problem (a failing target page reports its own status line verbatim, so
  * `error` can read "403 Forbidden" on an otherwise-200 response). A 403 is
- * named as no active subscription, a used-up free API trial or a refused
- * address only when the upstream message says which; otherwise it is reported
- * neutrally, without blaming billing.
+ * named as no active subscription, a used-up free plan or a refused address
+ * only when the upstream message says which; otherwise it is reported
+ * neutrally, without blaming billing. A country refused on the free plan is
+ * named by its fixed prefix on any status, since in JSON mode it arrives on
+ * an HTTP 200.
  */
 function classifyFailure(statusCode: number, upstreamReason?: string): CaptureFailure {
 	const lower = (upstreamReason ?? '').toLowerCase().trim();
@@ -294,6 +308,18 @@ function classifyFailure(statusCode: number, upstreamReason?: string): CaptureFa
 		);
 	}
 
+	if (lower.startsWith(COUNTRY_NEEDS_PAID_PLAN_PREFIX)) {
+		return new CaptureFailure(
+			'country_needs_paid_plan',
+			`Site-Shot refused the capture: on the free plan, a capture from a country other than the US needs a paid plan (${COUNTRY_NEEDS_PAID_PLAN_PREFIX}).`,
+			{
+				httpCode,
+				description:
+					"The key itself is valid. The refused request still counts toward the month's 100 free-plan captures. Paid plans start at $5/mo for 2,000: https://www.site-shot.com/pricing/.",
+			},
+		);
+	}
+
 	if (statusCode === 401 || /userkey|api.?key|invalid key|unauthoriz|authenticat/.test(lower)) {
 		return new CaptureFailure('invalid_api_key', `Site-Shot rejected the API key${echo}.`, {
 			httpCode,
@@ -308,28 +334,29 @@ function classifyFailure(statusCode: number, upstreamReason?: string): CaptureFa
 		const blocked = (message: string, description: string) =>
 			new CaptureFailure('subscription_inactive', message, { httpCode, description });
 
-		if (lower.startsWith(TRIAL_USED_UP_PREFIX)) {
-			const renewsOn = TRIAL_RENEWS_ON.exec(upstreamReason ?? '')?.[1];
-			const usedUp = `The Site-Shot account's free API trial is used up for this month (${TRIAL_USED_UP_PREFIX}).`;
+		const usedUpPrefix = FREE_PLAN_USED_UP_PREFIXES.find((prefix) => lower.startsWith(prefix));
+		if (usedUpPrefix) {
+			const renewsOn = FREE_PLAN_RENEWS_ON.exec(upstreamReason ?? '')?.[1];
+			const usedUp = `The Site-Shot account's free plan is used up for this month (${usedUpPrefix}).`;
 			return renewsOn
 				? blocked(
 						`${usedUp} It renews on ${renewsOn} (UTC).`,
-						'The key itself is valid. For more captures, choose a plan at https://www.site-shot.com/pricing/.',
+						'The key itself is valid. For more captures, choose a paid plan at https://www.site-shot.com/pricing/.',
 					)
 				: blocked(
 						usedUp,
-						'The key itself is valid. The trial renews monthly; for more captures, choose a plan at https://www.site-shot.com/pricing/.',
+						'The key itself is valid. The free plan renews every month; for more captures, choose a paid plan at https://www.site-shot.com/pricing/.',
 					);
 		}
 		if (lower === 'no active subscription found') {
 			return blocked(
 				`The Site-Shot account has no active subscription${echo}.`,
-				'The key itself is valid. If the account has never had a plan, start the free API trial at https://www.site-shot.com/start/; otherwise choose a plan at https://www.site-shot.com/pricing/.',
+				'The key itself is valid. If the account has never had a paid plan, switch on the free plan at https://www.site-shot.com/start/; otherwise choose a paid plan at https://www.site-shot.com/pricing/.',
 			);
 		}
 		return new CaptureFailure(
 			'access_refused',
-			'Site-Shot refused the capture (HTTP 403): the account may have no active subscription or its free API trial captures may be used up, or the address may not be allowed.',
+			'Site-Shot refused the capture (HTTP 403): the account may have no active subscription or its free plan may be used up for this month, or the address may not be allowed.',
 			{
 				httpCode,
 				description:

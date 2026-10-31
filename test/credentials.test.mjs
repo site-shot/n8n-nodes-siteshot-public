@@ -80,10 +80,18 @@ test('the node never names the credential field itself, so it cannot read the ke
 	assert.ok(!declared.includes(SECRET_KEY));
 });
 
-test('the API key field describes the free API trial, not a paid-only API', () => {
+test('the API key field describes the free plan, not a paid-only API', () => {
 	const [apiKey] = new SiteShotApi().properties;
-	assert.ok(/free API trial of 100 captures a month/.test(apiKey.description), apiKey.description);
-	assert.ok(!/no free API|paid plan is required/i.test(apiKey.description), apiKey.description);
+	assert.ok(
+		apiKey.description.includes(
+			"A confirmed account's API key comes with the free plan: 100 API captures a month, no card needed; paid plans start at $5/mo for 2,000.",
+		),
+		apiKey.description,
+	);
+	assert.ok(
+		!/trial|no free API|paid plan is required/i.test(apiKey.description),
+		apiKey.description,
+	);
 });
 
 test('the credential points at documentation', () => {
@@ -297,8 +305,9 @@ test('an inactive subscription is reported distinctly from a bad key', () => {
 	const { message } = blocked.properties;
 	assert.ok(/subscription/i.test(message), message);
 	// The rule cannot read the body, so it names both causes of a 403: no
-	// active plan, or a free API trial whose month is used up.
-	assert.ok(/free API trial/i.test(message), message);
+	// active plan, or a free plan whose month is used up.
+	assert.ok(/free plan is used up for this month/i.test(message), message);
+	assert.ok(!/trial/i.test(message), message);
 	// It must not send the user off to fix a key that is actually fine. Saying
 	// "the API key is valid" is the opposite of blaming it, so the check is on
 	// the instruction, not on the words "API key".

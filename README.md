@@ -21,11 +21,11 @@ include the Site-Shot SDK.
   see [Compatibility](#compatibility).
 - A Site-Shot API key, from the
   [Site-Shot quickstart](https://www.site-shot.com/start/). A confirmed
-  account's API key comes with a free API trial of 100 captures a month, no
-  card needed (an account confirmed before 2026-10-30 starts it on the
-  quickstart page; an account that has had a paid plan before does not get it);
-  [paid plans](https://www.site-shot.com/pricing/) from $5/mo for 2,000 add
-  volume.
+  account's API key comes with the free plan: 100 API captures a month, no card
+  needed. An account confirmed before 2026-10-30 switches it on with one button
+  on the quickstart page; an account that has had a paid plan before does not
+  get the free plan. [Paid plans](https://www.site-shot.com/pricing/) start at
+  $5/mo for 2,000.
 
 ## Installation
 
@@ -53,7 +53,7 @@ own code never reads it.
 | --- | --- |
 | success | The key was accepted. |
 | `401` | The key is missing or not recognised. |
-| `403` | The key is valid, but the account has no active subscription, or its free API trial captures for this month are used up. |
+| `403` | The key is valid, but the account has no active subscription, or its free plan is used up for this month. |
 
 ### The credential test and your quota
 
@@ -143,22 +143,23 @@ responses that are not the expected JSON.
 | --- | --- |
 | HTTP 401 | The API key was rejected. |
 | HTTP 403, `No active subscription found` | The account has no active subscription; the key itself is fine. |
-| HTTP 403, `Free API trial used up` | This month's free API trial captures are used up, with the date the trial renews when the API gives one; the key itself is fine. |
+| HTTP 403, `Free plan used up` or `Free API trial used up` (the API may use either wording) | This month's free-plan captures are used up, with the date the free plan renews when the API gives one; the key itself is fine. |
 | HTTP 403, `Forbidden target address` | Site-Shot does not capture this address, for example one on a private or local network. |
-| Any other HTTP 403 | Site-Shot refused the capture: the account may have no active subscription or its free API trial captures may be used up, or the address may not be allowed. |
+| Any other HTTP 403 | Site-Shot refused the capture: the account may have no active subscription or its free plan may be used up for this month, or the address may not be allowed. |
 | HTTP 402 or 429, or a quota failure | A quota or payment problem. |
 | `country_unavailable` | No capacity in the requested country right now. |
+| `Geotargeting needs a paid plan` | Site-Shot refuses a capture from a country other than the US on the free plan and returns an error instead of an image; the refused request still counts toward the month's 100. The node has no country option, so it does not ask for one itself. |
 | HTTP 5xx | The API is unavailable. |
 | Capture failed on an HTTP 200 | The page could not be captured. |
 | Invalid URL or viewport | Rejected before any request is sent. |
 
 Error messages are written by this node. They include the HTTP status, and
 upstream wording only when it matches a short list of known reasons (plus a
-used-up trial's renewal date, when it has the exact `YYYY-MM-DD (UTC)` form);
-they never include the API key, the request address, headers or response
-bodies. The node writes no logs. With **Continue On Fail** enabled, a failed
-item keeps its input JSON and pairing, gains an `error` message and has no
-binary field.
+used-up free plan's renewal date, when it has the exact `YYYY-MM-DD (UTC)`
+form); they never include the API key, the request address, headers or
+response bodies. The node writes no logs. With **Continue On Fail** enabled, a
+failed item keeps its input JSON and pairing, gains an `error` message and has
+no binary field.
 
 Limits, fixed in this version:
 
@@ -279,6 +280,19 @@ is not an independent n8n Cloud execution test.
 
 ## Version history
 
+- **0.1.2:** the node and its credential describe the free plan and explain a
+  `403` by the API's own message. The **API Key** field no longer says that a
+  paid plan is required: a confirmed account's key comes with the free plan of
+  100 API captures a month. A capture refused with `403` now says which of these
+  it was: no active subscription (with where to switch the free plan on), this
+  month's free plan used up (with the date it renews when the API gives one), or
+  an address Site-Shot does not capture, such as one on a private network. If
+  Site-Shot answers that a country other than the US needs a paid plan, the
+  node says so instead of reporting a failed page capture. Any
+  other `403` is reported neutrally, without sending you to buy a paid plan. The
+  credential test's `403` names both billing causes, and the hint for a rejected
+  key links to the quickstart (`/start/`), where the key is shown. The requests
+  the node sends are unchanged.
 - **0.1.1:** the node's codex file (`SiteShot.node.json`) lists only the
   `Development` category. 0.1.0 also listed `Developer Tools`, which is not a
   category n8n accepts for a community node. The node's code, credential and

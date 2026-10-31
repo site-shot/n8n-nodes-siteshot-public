@@ -152,40 +152,107 @@ test('HTTP 403 is an inactive subscription, distinct from a rejected key', () =>
 	assert.ok(!/API key/i.test(unexplained.message), unexplained.message);
 });
 
-/** The 403 body the API sends once a free API trial's month is spent. */
-const TRIAL_USED_UP =
+/** The 403 body the API sends once the free plan's month is spent. */
+const FREE_PLAN_USED_UP =
+	'Free plan used up: 100 captures this month. It renews on 2026-11-30 (UTC). For more, choose a paid plan: https://www.site-shot.com/pricing/';
+
+/**
+ * The same refusal in the other wording the API may use; today it sends this
+ * one.
+ */
+const OLD_TRIAL_USED_UP =
 	'Free API trial used up: 100 captures this month. It renews on 2026-11-30 (UTC). For more, choose a plan: https://www.site-shot.com/pricing/';
 
-test('HTTP 403 for a used-up free API trial says so, and is not a rejected key', () => {
-	const err = failsWith('subscription_inactive', () =>
-		extractCaptureImage({ statusCode: 403, body: { message: TRIAL_USED_UP } }),
-	);
-	assert.equal(err.httpCode, '403');
-	assert.ok(/free API trial/i.test(err.message), err.message);
-	assert.ok(!/subscription/i.test(err.message), err.message);
-	assert.ok(!/API key/i.test(err.message), err.message);
-	assert.ok(/key itself is valid/i.test(err.description), err.description);
-	// The strictly matched renewal date is passed on; the count and the
-	// upstream link are not.
-	assert.ok(err.message.endsWith('It renews on 2026-11-30 (UTC).'), err.message);
-	assert.ok(!/renews monthly/i.test(err.description), err.description);
-	assert.ok(!/100 captures|For more, choose a plan:/.test(err.message + err.description), err.message);
-});
+/** Everything after the matched start is upstream text that must not leak. */
+const UPSTREAM_TAIL = /100 captures|For more, choose a (paid )?plan:/;
 
-test('a used-up free API trial without a well-formed renewal date says it renews monthly', () => {
-	for (const message of [
-		'Free API trial used up: 100 captures this month.',
-		'Free API trial used up: 100 captures this month. It renews on 30.11.2026 (UTC).',
-		'Free API trial used up. It renews on 2026-11-30T00:00 (UTC).',
-		'Free API trial used up. It renews on 2026-11-30 <b>soon</b>.',
+test('HTTP 403 for a used-up free plan says so, in either wording, and is not a rejected key', () => {
+	for (const [message, echoed] of [
+		[FREE_PLAN_USED_UP, 'free plan used up'],
+		[OLD_TRIAL_USED_UP, 'free api trial used up'],
+		// Matched case-insensitively.
+		[
+			'FREE PLAN USED UP: 100 captures this month. It renews on 2026-11-30 (UTC).',
+			'free plan used up',
+		],
+		[
+			'free api trial used up: 100 captures this month. It renews on 2026-11-30 (UTC).',
+			'free api trial used up',
+		],
 	]) {
 		const err = failsWith('subscription_inactive', () =>
 			extractCaptureImage({ statusCode: 403, body: { message } }),
 		);
-		assert.ok(/free API trial is used up/i.test(err.message), err.message);
-		assert.ok(!/renews on/i.test(err.message), err.message);
-		assert.ok(/renews monthly/i.test(err.description), err.description);
-		assert.ok(!/2026|30\.11|100 captures|<b>/.test(err.message + err.description), err.message);
+		assert.equal(err.httpCode, '403');
+		// Our own words say "free plan" for both; only the matched start is
+		// echoed, then the strictly matched renewal date.
+		assert.equal(
+			err.message,
+			`The Site-Shot account's free plan is used up for this month (${echoed}). It renews on 2026-11-30 (UTC).`,
+		);
+		assert.ok(!/trial/i.test(err.message.replace(`(${echoed})`, '')), err.message);
+		assert.ok(!/subscription/i.test(err.message), err.message);
+		assert.ok(!/API key/i.test(err.message), err.message);
+		assert.equal(
+			err.description,
+			'The key itself is valid. For more captures, choose a paid plan at https://www.site-shot.com/pricing/.',
+		);
+		assert.ok(!UPSTREAM_TAIL.test(err.message + err.description), err.message);
+	}
+});
+
+test('the renewal date is taken from the free-plan text as the API gives it', () => {
+	for (const [message, date] of [
+		[
+			'Free plan used up: 100 captures this month. It renews on 2027-01-31 (UTC). For more, choose a paid plan: https://www.site-shot.com/pricing/',
+			'2027-01-31',
+		],
+		['Free plan used up: 2000 captures this month. It renews on 2026-12-01 (UTC).', '2026-12-01'],
+		[
+			'Free API trial used up: 100 captures this month. It renews on 2027-02-28 (UTC).',
+			'2027-02-28',
+		],
+	]) {
+		const err = failsWith('subscription_inactive', () =>
+			extractCaptureImage({ statusCode: 403, body: { message } }),
+		);
+		assert.ok(err.message.endsWith(`It renews on ${date} (UTC).`), err.message);
+		assert.ok(!/renews every month/i.test(err.description), err.description);
+		assert.ok(!/2000 captures/.test(err.message), err.message);
+	}
+});
+
+test('a used-up free plan without a well-formed renewal date says it renews every month', () => {
+	for (const start of ['Free plan used up', 'Free API trial used up']) {
+		for (const message of [
+			`${start}: 100 captures this month.`,
+			`${start}: 100 captures this month. It renews on 30.11.2026 (UTC).`,
+			`${start}. It renews on 2026-11-30T00:00 (UTC).`,
+			`${start}. It renews on 2026-11-30 <b>soon</b>.`,
+			`${start}. it renews on 2026-11-30 (utc).`,
+		]) {
+			const err = failsWith('subscription_inactive', () =>
+				extractCaptureImage({ statusCode: 403, body: { message } }),
+			);
+			assert.ok(/free plan is used up for this month/i.test(err.message), err.message);
+			assert.ok(!/renews on/i.test(err.message), err.message);
+			assert.equal(
+				err.description,
+				'The key itself is valid. The free plan renews every month; for more captures, choose a paid plan at https://www.site-shot.com/pricing/.',
+			);
+			assert.ok(!/2026|30\.11|100 captures|<b>/.test(err.message + err.description), err.message);
+		}
+	}
+});
+
+test('only a message that starts with a used-up wording is read as a used-up free plan', () => {
+	for (const message of [
+		'Your free plan used up: 100 captures this month.',
+		'free plan',
+		'free api trial',
+		'Free plan: 100 captures this month.',
+	]) {
+		failsWith('access_refused', () => extractCaptureImage({ statusCode: 403, body: { message } }));
 	}
 });
 
@@ -195,7 +262,7 @@ test('an unexplained HTTP 403 is reported neutrally, without blaming billing or 
 		assert.equal(err.httpCode, '403');
 		assert.equal(
 			err.message,
-			'Site-Shot refused the capture (HTTP 403): the account may have no active subscription or its free API trial captures may be used up, or the address may not be allowed.',
+			'Site-Shot refused the capture (HTTP 403): the account may have no active subscription or its free plan may be used up for this month, or the address may not be allowed.',
 		);
 		assert.ok(!/API key/i.test(err.message), err.message);
 		// It may be the address rather than billing, so it does not send the
@@ -222,11 +289,48 @@ test('a refused target address is its own failure, not a billing or key problem'
 	}
 });
 
-test('a known "no active subscription" 403 does not blame the free API trial', () => {
+test('a country refused on the free plan names the paid plan, on the JSON-mode 200 and on a 403', () => {
+	const refusal =
+		'Geotargeting needs a paid plan: the free plan captures from the default location or the US. Plans: https://www.site-shot.com/pricing/';
+	for (const [statusCode, body] of [
+		// JSON mode, which this node always uses: HTTP 200, `error`, no image.
+		[200, { error: refusal }],
+		// Matched by the prefix alone, case-insensitively.
+		[200, { error: 'GEOTARGETING NEEDS A PAID PLAN: something else entirely' }],
+		// Image mode's 403.
+		[403, { message: refusal }],
+	]) {
+		const err = failsWith('country_needs_paid_plan', () =>
+			extractCaptureImage({ statusCode, body }),
+		);
+		assert.equal(err.httpCode, String(statusCode));
+		assert.equal(
+			err.message,
+			'Site-Shot refused the capture: on the free plan, a capture from a country other than the US needs a paid plan (geotargeting needs a paid plan).',
+		);
+		assert.equal(
+			err.description,
+			"The key itself is valid. The refused request still counts toward the month's 100 free-plan captures. Paid plans start at $5/mo for 2,000: https://www.site-shot.com/pricing/.",
+		);
+		const text = `${err.message} ${err.description}`;
+		assert.ok(!/trial|HTTP 403|API key|could not capture the page/i.test(text), text);
+		assert.ok(!/default location|something else/.test(text), text);
+	}
+});
+
+test('a known "no active subscription" 403 does not blame the free plan, and says where to switch it on', () => {
 	const err = failsWith('subscription_inactive', () =>
 		extractCaptureImage({ statusCode: 403, body: { message: 'No active subscription found' } }),
 	);
-	assert.ok(!/trial/i.test(err.message), err.message);
+	assert.equal(
+		err.message,
+		'The Site-Shot account has no active subscription (no active subscription found).',
+	);
+	assert.equal(
+		err.description,
+		'The key itself is valid. If the account has never had a paid plan, switch on the free plan at https://www.site-shot.com/start/; otherwise choose a paid plan at https://www.site-shot.com/pricing/.',
+	);
+	assert.ok(!/trial/i.test(err.message + err.description), err.message);
 	assert.ok(!/reactivate/i.test(err.description), err.description);
 });
 
