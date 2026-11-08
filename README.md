@@ -148,9 +148,10 @@ responses that are not the expected JSON.
 | Any other HTTP 403 | Site-Shot refused the capture: the account may have no active subscription or its free plan may be used up for this month, or the address may not be allowed. |
 | HTTP 402 or 429, or a quota failure | A quota or payment problem. |
 | `country_unavailable` | No capacity in the requested country right now. |
+| `error_code` `proxy_navigation_failed` on an HTTP 200 | Site-Shot could not open the page, for example because the address does not exist or is mistyped. The attempt still counts as a capture. |
 | `Geotargeting needs a paid plan` | Site-Shot refuses a capture from a country other than the US on the free plan and returns an error instead of an image; the refused request still counts toward the month's 100. The node has no country option, so it does not ask for one itself. |
 | HTTP 5xx | The API is unavailable. |
-| Capture failed on an HTTP 200 | The page could not be captured. |
+| Capture failed on an HTTP 200 | The page could not be captured. A status line from the page or proxy (such as `407 Proxy Authentication Required`) or a browser network error is never read as a key, quota or option problem. |
 | Invalid URL or viewport | Rejected before any request is sent. |
 
 Error messages are written by this node. They include the HTTP status, and

@@ -131,6 +131,41 @@ test('an upstream "403 Forbidden" capture failure is not blamed on the API key',
 	assert.ok(!/API key/i.test(err.message), err.message);
 });
 
+test('an unreachable page (error_code proxy_navigation_failed) is not reported as a timeout', () => {
+	// Measured live: an address that does not resolve answers HTTP 200 with
+	// this envelope in JSON mode, and `error` reads "504 Gateway Timeout".
+	const body = {
+		...appErrorEnvelope('504 Gateway Timeout', '504', ''),
+		image: 'data:image/png;base64,',
+		error_code: 'proxy_navigation_failed',
+	};
+	const err = failsWith('page_unreachable', () => extractCaptureImage({ statusCode: 200, body }));
+	assert.equal(err.httpCode, '200');
+	assert.equal(err.message, 'Site-Shot could not open the page (proxy_navigation_failed).');
+	assert.ok(/spelled correctly/.test(err.description), err.description);
+	assert.ok(/still counts as a capture/.test(err.description), err.description);
+	assert.ok(!/timed out|simpler page/i.test(`${err.message} ${err.description}`));
+});
+
+test('error_code country_unavailable is read even when the error text differs', () => {
+	const body = { error: 'No proxy available', error_code: 'country_unavailable' };
+	failsWith('country_unavailable', () => extractCaptureImage({ statusCode: 200, body }));
+});
+
+test('a page-side status line or browser error on a 200 is not read as a key or option problem', () => {
+	for (const error of [
+		'407 Proxy Authentication Required',
+		'401 Unauthorized',
+		'net::ERR_CERT_AUTHORITY_INVALID',
+		'400 Bad Request: invalid',
+	]) {
+		const err = failsWith('capture_failed', () =>
+			extractCaptureImage({ statusCode: 200, body: appErrorEnvelope(error, error.slice(0, 3)) }),
+		);
+		assert.ok(!/API key|parameters|quota/i.test(err.message), `${error}: ${err.message}`);
+	}
+});
+
 test('HTTP 401 is classified as a rejected API key', () => {
 	for (const message of ['Invalid authentication credentials', 'No API key found in request']) {
 		const err = failsWith('invalid_api_key', () =>

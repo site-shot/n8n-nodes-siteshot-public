@@ -82,6 +82,7 @@ export type CaptureFailureReason =
 	| 'country_unavailable'
 	| 'invalid_parameters'
 	| 'upstream_timeout'
+	| 'page_unreachable'
 	| 'api_unavailable'
 	| 'capture_failed'
 	| 'unexpected_response'
@@ -164,6 +165,16 @@ const TARGET_NOT_ALLOWED_PREFIX = 'forbidden target address';
  * echoed: the rest of the sentence is not stable.
  */
 const COUNTRY_NEEDS_PAID_PLAN_PREFIX = 'geotargeting needs a paid plan';
+
+/**
+ * `error_code` the API sends in JSON mode when the browser could not open the
+ * page at all, e.g. an address that does not resolve. Its `error` text then
+ * reads "504 Gateway Timeout", which must not be reported as a slow page.
+ */
+const PAGE_UNREACHABLE_CODE = 'proxy_navigation_failed';
+
+/** An HTTP status line or a browser network error, as the page side reports it. */
+const PAGE_SIDE_ERROR = /^(\d{3}\b|net::err_)/;
 
 
 /**
@@ -283,12 +294,37 @@ export function buildCaptureQuery(
  * named by its fixed prefix on any status, since in JSON mode it arrives on
  * an HTTP 200.
  */
-function classifyFailure(statusCode: number, upstreamReason?: string): CaptureFailure {
+function classifyFailure(
+	statusCode: number,
+	upstreamReason?: string,
+	errorCode?: string,
+): CaptureFailure {
 	const lower = (upstreamReason ?? '').toLowerCase().trim();
+	const code = (errorCode ?? '').toLowerCase().trim();
 	const echo = ALLOWED_UPSTREAM_REASONS.has(lower) ? ` (${lower})` : '';
 	const httpCode = statusCode;
+	// On a 2xx, `error` may be the target page's (or the proxy's) own status
+	// line, e.g. "504 Gateway Timeout" or "407 Proxy Authentication Required",
+	// or a browser network error such as "net::ERR_CERT_AUTHORITY_INVALID".
+	// Neither says anything about the key, the plan or this node's options,
+	// so the keyword rules below are not applied to them.
+	const pageSideError = statusCode >= 200 && statusCode < 300 && PAGE_SIDE_ERROR.test(lower);
 
-	if (lower === 'country_unavailable') {
+	// `error_code` is the API's own machine-readable reason, so it is read
+	// before any wording in `error`.
+	if (code === PAGE_UNREACHABLE_CODE) {
+		return new CaptureFailure(
+			'page_unreachable',
+			`Site-Shot could not open the page (${PAGE_UNREACHABLE_CODE}).`,
+			{
+				httpCode,
+				description:
+					'Check that the address is spelled correctly, that the site exists and that it is publicly reachable. The attempt still counts as a capture.',
+			},
+		);
+	}
+
+	if (lower === 'country_unavailable' || code === 'country_unavailable') {
 		return new CaptureFailure(
 			'country_unavailable',
 			`Site-Shot has no capacity in the requested country right now (country_unavailable).`,
@@ -320,7 +356,10 @@ function classifyFailure(statusCode: number, upstreamReason?: string): CaptureFa
 		);
 	}
 
-	if (statusCode === 401 || /userkey|api.?key|invalid key|unauthoriz|authenticat/.test(lower)) {
+	if (
+		statusCode === 401 ||
+		(!pageSideError && /userkey|api.?key|invalid key|unauthoriz|authenticat/.test(lower))
+	) {
 		return new CaptureFailure('invalid_api_key', `Site-Shot rejected the API key${echo}.`, {
 			httpCode,
 			description:
@@ -368,7 +407,7 @@ function classifyFailure(statusCode: number, upstreamReason?: string): CaptureFa
 	if (
 		statusCode === 402 ||
 		statusCode === 429 ||
-		/quota|limit exceed|payment|credit|subscription/.test(lower)
+		(!pageSideError && /quota|limit exceed|payment|credit|subscription/.test(lower))
 	) {
 		return new CaptureFailure(
 			'quota_or_payment',
@@ -377,7 +416,10 @@ function classifyFailure(statusCode: number, upstreamReason?: string): CaptureFa
 		);
 	}
 
-	if (statusCode === 400 || /invalid|out of range|must be|unsupported/.test(lower)) {
+	if (
+		statusCode === 400 ||
+		(!pageSideError && /invalid|out of range|must be|unsupported/.test(lower))
+	) {
 		return new CaptureFailure(
 			'invalid_parameters',
 			'Site-Shot rejected the capture parameters.',
@@ -442,7 +484,9 @@ export function extractCaptureImage(response: { statusCode: unknown; body: unkno
 	}
 
 	const upstreamError = asNonEmptyString(body.error);
-	if (upstreamError) throw classifyFailure(statusCode, upstreamError);
+	if (upstreamError) {
+		throw classifyFailure(statusCode, upstreamError, asNonEmptyString(body.error_code));
+	}
 
 	if (!ok) throw classifyFailure(statusCode, asNonEmptyString(body.message));
 
