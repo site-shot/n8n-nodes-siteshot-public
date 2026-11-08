@@ -85,6 +85,12 @@ include the Site-Shot SDK.
   **Settings → Community Nodes** by entering the package name,
   `n8n-nodes-siteshot`.
 
+The nodes panel and n8n Cloud install the version that n8n has verified, which
+can lag behind npm. The options **Block Ads**, **Remove Cookie Banners** and
+**Delay (Ms)**, and the **WebP** format, need version 0.1.3 or later; see
+[Version history](#version-history). In an older version, remove those options
+from the example workflow in [Quick start](#quick-start).
+
 The versions published to npm are listed on its
 [npm page](https://www.npmjs.com/package/n8n-nodes-siteshot); a package of this
 name from anywhere else is not this project.
@@ -106,7 +112,7 @@ own code never reads it.
 | Test result | Meaning |
 | --- | --- |
 | success | The key was accepted. |
-| `401` | The key is missing or not recognised. n8n shows: "Site-Shot did not recognise this API key. Copy it again from https://www.site-shot.com/start/, without spaces." |
+| `401` | The key is missing or not recognised. From version 0.1.3 the test says: "Site-Shot did not recognise this API key. Copy it again from https://www.site-shot.com/start/, without spaces." |
 | `403` | The key is valid, but the account has no active subscription, or its free plan is used up for this month. |
 
 ### The credential test and your quota
@@ -211,10 +217,14 @@ Limits, fixed in this version:
 
 ## Compatibility
 
-- **Tested:** n8n 2.40.5 and n8n 2.43.6, in their official Docker images for
-  linux/arm64, against the live Site-Shot API: installing the package, the
-  credential test, PNG, JPEG and WebP captures, a rejected key, an address that
-  does not exist, and Continue On Fail.
+- **Tested,** in the official n8n Docker images for linux/arm64, against the
+  live Site-Shot API:
+  - version 0.1.3 on n8n 2.43.6: PNG with Block Ads, Remove Cookie Banners and
+    Delay, WebP, and an address that does not exist with Continue On Fail;
+  - version 0.1.1 on n8n 2.43.6: installing the package, the credential test,
+    a JPEG capture and a rejected key;
+  - a pre-release build on n8n 2.40.5: the credential test and a PNG capture.
+
   Other versions, other architectures and n8n Cloud itself have not been tested
   by this project; on n8n Cloud the node is installed through the verified
   listing.

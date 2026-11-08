@@ -73,8 +73,8 @@ opening a saved credential sent a test without anything being clicked.
 
 - CI only verifies. The stage workflow (`.github/workflows/stage.yml`) runs
   only by hand and only stages; an ordinary push never publishes.
-- `repository` and `bugs` in `package.json` and the issue link below name this
-  repository, and the stage workflow refuses to run in any other.
+- `repository` and `bugs` in `package.json` and the issue link in `README.md` name
+  this repository, and the stage workflow refuses to run in any other.
 
 A release, step by step:
 
@@ -124,6 +124,9 @@ one, so a release is finished only after its last step:
 6. After the owner approves the staged version on npm and it is published,
    submit that version to n8n for re-verification of the verified listing, and
    check afterwards that the n8n registry lists the new version.
+   Until it does, the nodes panel and n8n Cloud install the older verified
+   version, so do not point users at options that are new in this release
+   (blog posts, listings) before this step is done.
 
 If a Stage run fails, look at npm's staged versions first (a staged version is
 not visible anonymously): if the version is staged, it only needs the owner's
