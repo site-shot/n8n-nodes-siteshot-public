@@ -112,8 +112,8 @@ export class SiteShotApi implements ICredentialType {
 	 *
 	 * The route's contract: it accepts or rejects the key as a capture would,
 	 * and answers without taking a screenshot or spending capture quota.
-	 * That it is live, and what one live test did cost, is stated once, in the
-	 * README ("The credential test and your quota").
+	 * That it is live, and what one live test did cost, is stated once, in
+	 * DEVELOPMENT.md ("The credential test and quota, as measured").
 	 *
 	 * The request carries no credential of its own: `authenticate` above is the
 	 * single source of truth for where the key goes.

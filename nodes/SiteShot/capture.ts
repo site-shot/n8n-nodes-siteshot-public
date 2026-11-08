@@ -18,9 +18,10 @@ export const API_ENDPOINT = 'https://api.site-shot.com/';
 export const CREDENTIALS_NAME = 'siteShotApi';
 
 /**
- * Client-side deadline handed to the n8n HTTP helper. Mirrors the SDK's
- * budget: the API's own default render deadline (60s) plus 30s of headroom so
- * the server gets to answer first.
+ * Client-side deadline handed to the n8n HTTP helper when no Delay is set.
+ * Mirrors the SDK's budget: the API's own default render deadline (60s) plus
+ * 30s of headroom so the server gets to answer first. A Delay extends it; see
+ * `requestTimeoutFor`.
  */
 export const REQUEST_TIMEOUT_MS = 90_000;
 
@@ -71,6 +72,21 @@ export const IMAGE_FORMATS = {
 /** Range accepted for the Delay option, in milliseconds. */
 export const DELAY_LIMITS = { min: 0, max: 30_000 } as const;
 
+/**
+ * Client-side deadline for one capture, in milliseconds.
+ *
+ * A Delay is waited out inside the render, so it comes on top of the API's
+ * render deadline. When the API retries a half-loaded page on its own, the
+ * retry keeps an explicit delay, so the delay can be paid twice: the deadline
+ * grows by twice the delay. Without this, a long Delay would make the node
+ * give up while a capture that still counts is running on the server.
+ */
+export function requestTimeoutFor(options: CaptureOptions = {}): number {
+	const { delay } = options;
+	if (typeof delay !== 'number' || !Number.isFinite(delay) || delay <= 0) return REQUEST_TIMEOUT_MS;
+	return REQUEST_TIMEOUT_MS + 2 * Math.min(delay, DELAY_LIMITS.max);
+}
+
 export type ImageFormat = keyof typeof IMAGE_FORMATS;
 
 export interface CaptureOptions {
@@ -93,6 +109,7 @@ export type CaptureFailureReason =
 	| 'target_not_allowed'
 	| 'country_needs_paid_plan'
 	| 'quota_or_payment'
+	| 'parallel_limit'
 	| 'country_unavailable'
 	| 'invalid_parameters'
 	| 'upstream_timeout'
@@ -181,13 +198,21 @@ const TARGET_NOT_ALLOWED_PREFIX = 'forbidden target address';
 const COUNTRY_NEEDS_PAID_PLAN_PREFIX = 'geotargeting needs a paid plan';
 
 /**
- * `error_code`s the API sends in JSON mode when the browser could not open the
- * page at all. `proxy_navigation_failed` covers an address that does not
- * resolve today, and its `error` text then reads "504 Gateway Timeout", which
- * must not be reported as a slow page. `dns_lookup_failed` is the API's own
- * code for a host that does not resolve once that API change ships.
+ * `error_code` the API sends in JSON mode when the browser's navigation
+ * failed before the page loaded. The renderer uses it for any failed
+ * navigation: an address that does not resolve (its `error` text then reads
+ * "504 Gateway Timeout"), but also a page that did not load in time or an
+ * access wall in front of it. So it is not read as a mistyped address alone,
+ * and not as a render timeout alone: the advice names both.
  */
-const PAGE_UNREACHABLE_CODES = new Set(['proxy_navigation_failed', 'dns_lookup_failed']);
+const NAVIGATION_FAILED_CODE = 'proxy_navigation_failed';
+
+/**
+ * `error_code` the API sends for a host that does not resolve, once that API
+ * change ships. Unlike `proxy_navigation_failed` it says only that, so the
+ * advice is about the address.
+ */
+const DNS_LOOKUP_FAILED_CODE = 'dns_lookup_failed';
 
 /** An HTTP status line or a browser network error, as the page side reports it. */
 const PAGE_SIDE_ERROR = /^(\d{3}\b|net::err_)/;
@@ -364,14 +389,26 @@ function classifyFailure(
 
 	// `error_code` is the API's own machine-readable reason, so it is read
 	// before any wording in `error`.
-	if (PAGE_UNREACHABLE_CODES.has(code)) {
+	if (code === DNS_LOOKUP_FAILED_CODE) {
 		return new CaptureFailure(
 			'page_unreachable',
 			`Site-Shot could not open the page (${code}).`,
 			{
 				httpCode,
 				description:
-					'Check that the address is spelled correctly, that the site exists and that it is publicly reachable. The attempt still counts as a capture.',
+					'The address did not resolve. Check that it is spelled correctly, that the site exists and that it is publicly reachable. The attempt still counts as a capture.',
+			},
+		);
+	}
+
+	if (code === NAVIGATION_FAILED_CODE) {
+		return new CaptureFailure(
+			'page_unreachable',
+			`Site-Shot could not open the page (${code}).`,
+			{
+				httpCode,
+				description:
+					'The address may be wrong or unreachable, or the site did not load in time. Check that the URL is spelled correctly and that the page is publicly reachable before trying again. The attempt still counts as a capture, and so does every retry.',
 			},
 		);
 	}
@@ -456,9 +493,23 @@ function classifyFailure(
 		);
 	}
 
+	// 429 is the API's parallel-request limit, not quota: the key already has
+	// as many captures running as its plan allows (one on the free plan). A
+	// request refused this way is not counted.
+	if (statusCode === 429) {
+		return new CaptureFailure(
+			'parallel_limit',
+			'Site-Shot is already running as many captures as this API key\'s plan allows (HTTP 429).',
+			{
+				httpCode,
+				description:
+					'The free plan runs one capture at a time per key; paid plans allow more. Wait for the previous capture to finish, or avoid running workflows that use this key at the same time. This refused request did not count as a capture.',
+			},
+		);
+	}
+
 	if (
 		statusCode === 402 ||
-		statusCode === 429 ||
 		(!pageSideError && /quota|limit exceed|payment|credit|subscription/.test(lower))
 	) {
 		return new CaptureFailure(
@@ -475,7 +526,10 @@ function classifyFailure(
 		return new CaptureFailure(
 			'invalid_parameters',
 			'Site-Shot rejected the capture parameters.',
-			{ httpCode, description: 'Check the URL and the viewport options on this node.' },
+			{
+				httpCode,
+				description: 'Check the URL and the options on this node (viewport, delay, format).',
+			},
 		);
 	}
 
@@ -708,17 +762,20 @@ function readErrorName(error: unknown): string | undefined {
  * touched: an axios error embeds the full request URL — `userkey` included —
  * in all three.
  */
-export function describeTransportFailure(error: unknown): CaptureFailure {
+export function describeTransportFailure(
+	error: unknown,
+	timeoutMs: number = REQUEST_TIMEOUT_MS,
+): CaptureFailure {
 	const code = readErrorCode(error);
 	const name = readErrorName(error);
 
 	if (name !== undefined || (code && TIMEOUT_CODES.has(code))) {
 		return new CaptureFailure(
 			'request_timeout',
-			`The Site-Shot request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.`,
+			`The Site-Shot request timed out after ${Math.round(timeoutMs / 1000)} seconds.`,
 			{
 				description:
-					'The capture was not retried, because a completed render still costs quota. Try a simpler page, or a smaller viewport.',
+					'The capture was not retried, because it may still have run and counted as a capture. Try a simpler page, a smaller viewport or a shorter Delay.',
 			},
 		);
 	}
@@ -736,6 +793,9 @@ export function describeTransportFailure(error: unknown): CaptureFailure {
 }
 
 /** Classify anything thrown while capturing one item into a safe failure. */
-export function toCaptureFailure(error: unknown): CaptureFailure {
-	return error instanceof CaptureFailure ? error : describeTransportFailure(error);
+export function toCaptureFailure(
+	error: unknown,
+	timeoutMs: number = REQUEST_TIMEOUT_MS,
+): CaptureFailure {
+	return error instanceof CaptureFailure ? error : describeTransportFailure(error, timeoutMs);
 }

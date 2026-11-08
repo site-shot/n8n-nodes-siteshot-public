@@ -6,8 +6,9 @@ the next node as binary data.
 
 ## Quick start
 
-1. Install the node: search for **Site-Shot** in the n8n nodes panel (see
-   [Installation](#installation)).
+1. Install the node: search for **Site-Shot** in the n8n nodes panel, or on
+   self-hosted n8n enter `n8n-nodes-siteshot` under **Settings → Community
+   Nodes** (see [Installation](#installation)).
 2. Copy your API key from the [Site-Shot quickstart](https://www.site-shot.com/start/)
    (create a free account there if you have none).
 3. In n8n, create a **Site-Shot API** credential and paste the key into
@@ -33,8 +34,7 @@ the Site-Shot node:
     },
     {
       "parameters": {
-        "url": "https://example.com/",
-        "options": { "removeCookieBanners": true, "blockAds": true }
+        "url": "https://example.com/"
       },
       "name": "Site-Shot",
       "type": "n8n-nodes-siteshot.siteShot",
@@ -49,6 +49,14 @@ the Site-Shot node:
   }
 }
 ```
+
+The example works with every version. The options **Block Ads**, **Remove
+Cookie Banners** and **Delay (Ms)**, and the **WebP** format, need version 0.1.3
+or later. The nodes panel and n8n Cloud install the version that n8n has
+verified, which can be older; if the node's **Options** offer no **Block Ads**,
+the installed version is older than 0.1.3. On self-hosted n8n, the instance
+owner can install 0.1.3 under **Settings → Community Nodes** by entering
+`n8n-nodes-siteshot@0.1.3`.
 
 ## What it does
 
@@ -70,10 +78,10 @@ include the Site-Shot SDK.
 - A Site-Shot API key, from the
   [Site-Shot quickstart](https://www.site-shot.com/start/). A confirmed
   account's API key comes with the free plan: 100 API captures a month, no card
-  needed. An account confirmed before 2026-10-30 switches it on with one button
-  on the quickstart page; an account that has had a paid plan before does not
-  get the free plan. [Paid plans](https://www.site-shot.com/pricing/) start at
-  $5/mo for 2,000.
+  needed, one capture at a time. An account confirmed before 2026-10-30
+  switches it on with one button on the quickstart page; an account that has
+  had a paid plan before does not get the free plan.
+  [Paid plans](https://www.site-shot.com/pricing/) start at $5/mo for 2,000.
 
 ## Installation
 
@@ -83,13 +91,14 @@ include the Site-Shot SDK.
   [n8n's guide to installing verified community nodes](https://docs.n8n.io/integrations/community-nodes/installation-and-management/install-verified-community-nodes/).
 - **Self-hosted n8n otherwise:** the instance owner installs it under
   **Settings → Community Nodes** by entering the package name,
-  `n8n-nodes-siteshot`.
+  `n8n-nodes-siteshot`. To install one exact version, add it to the name, for
+  example `n8n-nodes-siteshot@0.1.3`.
 
 The nodes panel and n8n Cloud install the version that n8n has verified, which
 can lag behind npm. The options **Block Ads**, **Remove Cookie Banners** and
 **Delay (Ms)**, and the **WebP** format, need version 0.1.3 or later; see
-[Version history](#version-history). In an older version, remove those options
-from the example workflow in [Quick start](#quick-start).
+[Version history](#version-history). On n8n Cloud they are available once n8n
+has verified a version that has them.
 
 The versions published to npm are listed on its
 [npm page](https://www.npmjs.com/package/n8n-nodes-siteshot); a package of this
@@ -117,10 +126,11 @@ own code never reads it.
 
 ### The credential test and your quota
 
-The credential test does not take a screenshot and does not count against your
-captures. n8n can run it on its own, for example when a saved credential is
-opened, so creating, opening and re-testing the credential can each send a
-request. How n8n runs the test is described in [DEVELOPMENT.md](DEVELOPMENT.md).
+The credential test does not take a screenshot. The route it calls is meant
+not to count against your captures, and in the one live check, recorded in
+[DEVELOPMENT.md](DEVELOPMENT.md), it did not. n8n can run the test on its own,
+for example when a saved credential is opened, so creating, opening and
+re-testing the credential can each send a request. How n8n runs the test is described in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Node reference
 
@@ -128,11 +138,11 @@ request. How n8n runs the test is described in [DEVELOPMENT.md](DEVELOPMENT.md).
 | --- | --- | --- | --- |
 | **URL** | yes | — | Must start with `http://` or `https://`. Never rewritten or guessed. |
 | **Put Output File in Field** | yes | `data` | Name of the output binary field. |
-| **Options → Block Ads** | no | off | Hides ads before the capture (`no_ads=1`). |
-| **Options → Delay (Ms)** | no | API default | Milliseconds to wait after the page loads, 0–30000 (`delay_time`). Leaving it unset is not a zero wait: the API applies its own. |
+| **Options → Block Ads** | no | off | Blocks common ads before the capture (`no_ads=1`). It uses a block list, so some ads may remain. |
+| **Options → Delay (Ms)** | no | not sent; 3000 when added | Milliseconds to wait after the page loads, 0–30000 (`delay_time`). Leaving it unset is not a zero wait: the API applies its own, and waits 3000 ms when it retries a capture that came out as an error or half-loaded page. A value set here is also used on that retry, so a value below 3000 shortens it. The delay adds to the request time; see the request timeout under [Cost, errors and limits](#cost-errors-and-limits). |
 | **Options → Format** | no | `png` | `png`, `jpeg` or `webp`. PNG and WebP are lossless; JPEG is lossy and smallest on photo-heavy pages. A WebP full-page capture taller than 16,383 px is cut at 16,383 px. An expression may also give `PNG`, `jpg` and so on; any other value is rejected before a request is sent. |
 | **Options → Full Page** | no | off | Captures the whole scrollable page. |
-| **Options → Remove Cookie Banners** | no | off | Removes cookie-consent banners and popups before the capture (`no_cookie_popup=1`). |
+| **Options → Remove Cookie Banners** | no | off | Tries to remove common cookie-consent banners and popups before the capture (`no_cookie_popup=1`). It uses a block list, so a banner a site draws itself may remain. |
 | **Options → Viewport Width** | no | API default (1024) | 100–8000 px. |
 | **Options → Viewport Height** | no | API default (768) | 100–20000 px. |
 
@@ -188,9 +198,10 @@ responses that are not the expected JSON.
 | HTTP 403, `Free plan used up` or `Free API trial used up` (the API may use either wording) | This month's free-plan captures are used up, with the date the free plan renews when the API gives one; the key itself is fine. |
 | HTTP 403, `Forbidden target address` | Site-Shot does not capture this address, for example one on a private or local network. |
 | Any other HTTP 403 | Site-Shot refused the capture: the account may have no active subscription or its free plan may be used up for this month, or the address may not be allowed. |
-| HTTP 402 or 429, or a quota failure | A quota or payment problem. |
+| HTTP 429 | The key already has as many captures running as its plan allows: the free plan runs one capture at a time, paid plans allow more. Wait for the previous capture to finish. The refused request does not count as a capture. |
+| HTTP 402, or a quota failure | A quota or payment problem. |
 | `country_unavailable` | No capacity in the requested country right now. |
-| `error_code` `proxy_navigation_failed` on an HTTP 200 | Site-Shot could not open the page, for example because the address does not exist or is mistyped. The attempt still counts as a capture. |
+| `error_code` `proxy_navigation_failed` on an HTTP 200 | Site-Shot could not open the page: the address may be wrong or unreachable, or the site did not load in time. The attempt still counts as a capture, and so does every retry. |
 | `Geotargeting needs a paid plan` | Site-Shot refuses a capture from a country other than the US on the free plan and returns an error instead of an image; the refused request still counts toward the month's 100. The node has no country option, so it does not ask for one itself. |
 | HTTP 5xx | The API is unavailable. |
 | Capture failed on an HTTP 200 | The page could not be captured. A status line from the page or proxy (such as `407 Proxy Authentication Required`) or a browser network error is never read as a key, quota or option problem. |
@@ -203,14 +214,17 @@ form); they never include the API key, the request address, headers or
 response bodies. The node writes no logs. With **Continue On Fail** enabled, a
 failed item keeps its input JSON and pairing and has no binary field. It gains
 `error` (the message), `errorReason` (a stable code such as `invalid_api_key`,
-`page_unreachable` or `subscription_inactive`), `errorDescription` (what to do)
-and, when the API answered, `httpCode`.
+`page_unreachable`, `parallel_limit` or `subscription_inactive`),
+`errorDescription` (what to do) and, when the API answered, `httpCode`.
 
 Limits, fixed in this version:
 
-- **Request timeout: 90 seconds**, handed to n8n's HTTP helper: the API's
-  default 60-second render deadline plus headroom. It is only as strict as that
-  helper, and it has not been measured against a real clock.
+- **Request timeout: 90 seconds plus twice the Delay**, handed to n8n's HTTP
+  helper: the API's default 60-second render deadline plus headroom, and the
+  delay, which the API's own retry of a capture may wait out a second time. A
+  request that times out may still have run on the server and count as a
+  capture. The timeout is only as strict as that helper, and it has not been
+  measured against a real clock.
 - **Largest screenshot: 32 MiB.** The check runs after the response has been
   received and before the image is decoded, so it stops an oversized image from
   being passed on but does not stop it being downloaded.
@@ -238,28 +252,33 @@ Building, testing, the local runtime fixture and the release steps are in
 
 ## Version history
 
-- **0.1.3:** new options **Block Ads**, **Remove Cookie Banners** and
-  **Delay (Ms)**, and the **WebP** format. All are off or unset by default, so
-  existing workflows send the same request. A page that cannot be opened, such
-  as a mistyped or non-existent address, is reported as such instead of as a
-  render timeout. A Format that is not `png`, `jpeg` or `webp` (for example from
-  an expression) is rejected before a request is sent; `jpg` and other letter
-  cases are accepted. The credential test explains a rejected key instead of
-  showing only "Unauthorized", and the credential's documentation link opens
-  the quickstart. With Continue On Fail, a failed item also carries
-  `errorReason`, `errorDescription` and `httpCode`.
-- **0.1.2:** the node and its credential describe the free plan and explain a
-  `403` by the API's own message. The **API Key** field no longer says that a
-  paid plan is required: a confirmed account's key comes with the free plan of
-  100 API captures a month. A capture refused with `403` now says which of these
-  it was: no active subscription (with where to switch the free plan on), this
-  month's free plan used up (with the date it renews when the API gives one), or
-  an address Site-Shot does not capture, such as one on a private network. If
+- **0.1.3:** the first release after 0.1.1. Version 0.1.2 was not published to
+  npm, so 0.1.3 also carries the 0.1.2 changes listed below. New options
+  **Block Ads**, **Remove Cookie Banners** and **Delay (Ms)**, and the
+  **WebP** format. All are off or unset by default, so existing workflows send
+  the same request. A page that Site-Shot could not open is reported as such
+  (the address may be wrong or unreachable, or the site did not load in time)
+  instead of as a render timeout. An HTTP 429 is reported as the
+  plan's limit on captures at once instead of as a quota or payment problem. The
+  request timeout grows with the Delay. A Format that is not `png`, `jpeg` or
+  `webp` (for example from an expression) is rejected before a request is
+  sent; `jpg` and other letter cases are accepted. The credential test
+  explains a rejected key instead of showing only "Unauthorized", and the
+  credential's documentation link opens the quickstart. With Continue On Fail,
+  a failed item also carries `errorReason`, `errorDescription` and `httpCode`.
+- **0.1.2** (not published to npm; these changes ship in 0.1.3): the node and
+  its credential describe the free plan and explain a `403` by the API's own
+  message. The **API Key** field no longer says that a paid plan is required:
+  a confirmed account's key comes with the free plan of 100 API captures a
+  month. A capture refused with `403` now says which of these it was: no
+  active subscription (with where to switch the free plan on), this month's
+  free plan used up (with the date it renews when the API gives one), or an
+  address Site-Shot does not capture, such as one on a private network. If
   Site-Shot answers that a country other than the US needs a paid plan, the
-  node says so instead of reporting a failed page capture. Any
-  other `403` is reported neutrally, without sending you to buy a paid plan. The
-  credential test's `403` names both billing causes, and the hint for a rejected
-  key links to the quickstart (`/start/`), where the key is shown. The requests
+  node says so instead of reporting a failed page capture. Any other `403` is
+  reported neutrally, without sending you to buy a paid plan. The credential
+  test's `403` names both billing causes, and the hint for a rejected key
+  links to the quickstart (`/start/`), where the key is shown. The requests
   the node sends are unchanged.
 - **0.1.1:** the node's codex file (`SiteShot.node.json`) lists only the
   `Development` category. 0.1.0 also listed `Developer Tools`, which is not a

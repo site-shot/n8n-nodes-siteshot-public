@@ -263,6 +263,28 @@ test('a bounded transport timeout is requested', async () => {
 	assert.ok(timeout > 0 && timeout <= 180000, `unexpected timeout ${timeout}`);
 });
 
+test('a Delay extends the transport timeout by twice the delay', async () => {
+	// The delay is waited out inside the render, and the API's own retry of an
+	// error-looking capture keeps an explicit delay, so it can be paid twice.
+	// A fixed 90 s would cut off a long Delay while the capture still counts.
+	const cases = [
+		{ options: {}, expected: 90_000 },
+		{ options: { delay: 0 }, expected: 90_000 },
+		{ options: { delay: 3000 }, expected: 96_000 },
+		{ options: { delay: 30_000 }, expected: 150_000 },
+	];
+	for (const { options, expected } of cases) {
+		const ctx = createExecuteContext({
+			params: { url: 'https://example.com/', binaryPropertyName: 'data', options },
+			transport: okPng(),
+		});
+
+		await run(ctx);
+
+		assert.equal(ctx.httpCalls[0].requestOptions.timeout, expected, JSON.stringify(options));
+	}
+});
+
 test('no user-controlled field can override the endpoint, userkey or response_type', async () => {
 	// Every parameter the user can reach, loaded with values that would hijack
 	// a reserved one if any of them were interpolated into the request.

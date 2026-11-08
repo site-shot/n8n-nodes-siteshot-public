@@ -16,6 +16,7 @@ import {
 	decodeCaptureImage,
 	extractCaptureImage,
 	normalizeFormat,
+	requestTimeoutFor,
 	toCaptureFailure,
 	validateTargetUrl,
 	validateViewport,
@@ -70,16 +71,17 @@ export class SiteShot implements INodeType {
 						name: 'blockAds',
 						type: 'boolean',
 						default: false,
-						description: 'Whether to hide ads on the page before it is captured',
+						description:
+							'Whether to block common ads before the page is captured. Uses a block list, so some ads may remain.',
 					},
 					{
 						displayName: 'Delay (Ms)',
 						name: 'delay',
 						type: 'number',
-						default: 1000,
+						default: 3000,
 						typeOptions: { minValue: 0, maxValue: 30000 },
 						description:
-							'Milliseconds to wait after the page loads before capturing, between 0 and 30000. Useful for pages that animate or load content late. If not set, Site-Shot applies its own wait.',
+							'Milliseconds to wait after the page loads before capturing, between 0 and 30000. Useful for pages that animate or load content late. Not sent unless added. When it is not added, Site-Shot applies its own wait, and waits 3000 ms when it retries a capture that came out as an error or half-loaded page. A value set here is also used on that retry, so a value below 3000 shortens it. This node waits up to 90 seconds plus twice the delay for the answer.',
 					},
 					{
 						displayName: 'Format',
@@ -111,7 +113,8 @@ export class SiteShot implements INodeType {
 						name: 'removeCookieBanners',
 						type: 'boolean',
 						default: false,
-						description: 'Whether to remove cookie-consent banners and popups before capturing',
+						description:
+							'Whether to try to remove common cookie-consent banners and popups before capturing. Uses a block list, so a banner a site draws itself may remain.',
 					},
 					{
 						displayName: 'Viewport Height',
@@ -139,6 +142,8 @@ export class SiteShot implements INodeType {
 		const output: INodeExecutionData[] = [];
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+			// Named in a timeout failure, so it is known before the request goes out.
+			let timeoutMs = REQUEST_TIMEOUT_MS;
 			try {
 				// Input is validated before anything is sent: a rejected capture
 				// still costs quota, so a bad URL must never reach the API.
@@ -146,6 +151,7 @@ export class SiteShot implements INodeType {
 				const options = this.getNodeParameter('options', itemIndex, {}) as CaptureOptions;
 				validateViewport(options);
 				const format = normalizeFormat(options.format);
+				timeoutMs = requestTimeoutFor(options);
 
 				const binaryPropertyName = this.getNodeParameter(
 					'binaryPropertyName',
@@ -167,7 +173,8 @@ export class SiteShot implements INodeType {
 						// carries a capture failure.
 						returnFullResponse: true,
 						ignoreHttpStatusErrors: true,
-						timeout: REQUEST_TIMEOUT_MS,
+						// A Delay is waited out inside the render, possibly twice.
+						timeout: timeoutMs,
 						// The key is only ever valid for this host; never let a redirect
 						// carry it anywhere else.
 						allowedDomains: 'api.site-shot.com',
@@ -197,7 +204,7 @@ export class SiteShot implements INodeType {
 				// Everything thrown here is reduced to a failure this node authored.
 				// A raw transport error embeds the request URL — `userkey` included —
 				// in its message, config and response, so none of it is passed on.
-				const failure = toCaptureFailure(error);
+				const failure = toCaptureFailure(error, timeoutMs);
 
 				if (this.continueOnFail()) {
 					// The same safe fields an error would carry, so a workflow can

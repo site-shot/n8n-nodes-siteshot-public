@@ -225,7 +225,7 @@ test('a country refused on the free plan (HTTP 200, error, no image) says a paid
 	assert.ok(!/default location/.test(serializeError(err)), 'upstream wording past the prefix leaked');
 });
 
-test('quota, upstream and unexpected-response failures each surface their status', async () => {
+test('parallel-limit, upstream and unexpected-response failures each surface their status', async () => {
 	const cases = [
 		{ response: fullResponse({ message: 'API rate limit exceeded' }, 429), httpCode: '429' },
 		{ response: fullResponse({ message: 'Service temporarily unavailable' }, 503), httpCode: '503' },
@@ -291,6 +291,19 @@ test('a client-side timeout is reported as a timeout, not as a capture', async (
 
 	assert.equal(ctx.binaryCalls.length, 0);
 	assert.ok(/timed out/i.test(err.message), err.message);
+	assert.ok(/after 90 seconds/.test(err.message), err.message);
+});
+
+test('a client-side timeout with a Delay names the extended deadline', async () => {
+	const ctx = createExecuteContext({
+		params: { ...baseParams, options: { delay: 30_000 } },
+		transport: Object.assign(new Error('timeout of 150000ms exceeded'), { code: 'ECONNABORTED' }),
+	});
+
+	const err = await capture(ctx);
+
+	assert.ok(/after 150 seconds/.test(err.message), err.message);
+	assert.ok(/counted as a capture/.test(err.description), err.description);
 });
 
 // ---------------------------------------------------------------------------

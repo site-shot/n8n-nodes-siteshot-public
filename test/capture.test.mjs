@@ -147,6 +147,17 @@ test('an unreachable page (error_code proxy_navigation_failed) is not reported a
 	assert.ok(!/timed out|simpler page/i.test(`${err.message} ${err.description}`));
 });
 
+test('proxy_navigation_failed advice names a slow page as well as a wrong address', () => {
+	// The renderer sends this code for any failed navigation, including a page
+	// that did not load in time or an access wall, and the API treats it as a
+	// proxy failure. Advice that only blames the address would mislead.
+	const body = { error: '504 Gateway Timeout', error_code: 'proxy_navigation_failed' };
+	const err = failsWith('page_unreachable', () => extractCaptureImage({ statusCode: 200, body }));
+	assert.ok(/wrong or unreachable/.test(err.description), err.description);
+	assert.ok(/did not load in time/.test(err.description), err.description);
+	assert.ok(/every retry/.test(err.description), err.description);
+});
+
 test('error_code dns_lookup_failed is an unreachable page too', () => {
 	// The API's own code for a host that does not resolve, once the
 	// honest-errors API change ships.
@@ -158,6 +169,8 @@ test('error_code dns_lookup_failed is an unreachable page too', () => {
 	const err = failsWith('page_unreachable', () => extractCaptureImage({ statusCode: 200, body }));
 	assert.equal(err.message, 'Site-Shot could not open the page (dns_lookup_failed).');
 	assert.ok(/spelled correctly/.test(err.description), err.description);
+	// This code says only that the host did not resolve.
+	assert.ok(!/did not load in time/.test(err.description), err.description);
 });
 
 test('error_code country_unavailable is read even when the error text differs', () => {
@@ -382,11 +395,22 @@ test('a known "no active subscription" 403 does not blame the free plan, and say
 	assert.ok(!/reactivate/i.test(err.description), err.description);
 });
 
-test('HTTP 402 and 429 are quota or payment failures', () => {
-	for (const statusCode of [402, 429]) {
-		failsWith('quota_or_payment', () =>
-			extractCaptureImage({ statusCode, body: { message: 'API rate limit exceeded' } }),
-		);
+test('HTTP 402 is a quota or payment failure', () => {
+	failsWith('quota_or_payment', () =>
+		extractCaptureImage({ statusCode: 402, body: { message: 'Payment required' } }),
+	);
+});
+
+test('HTTP 429 is the one-capture-at-a-time limit, not quota or payment', () => {
+	// The API answers 429 when the key already has a capture running (one at a
+	// time on the free plan). It is refused before admission and not counted;
+	// a spent monthly allowance is a 403 instead.
+	for (const body of [{ message: 'API rate limit exceeded' }, {}, 'Too Many Requests']) {
+		const err = failsWith('parallel_limit', () => extractCaptureImage({ statusCode: 429, body }));
+		assert.equal(err.httpCode, '429');
+		assert.ok(/one capture at a time/.test(err.description), err.description);
+		assert.ok(/did not count/.test(err.description), err.description);
+		assert.ok(!/quota|balance|payment/i.test(`${err.message} ${err.description}`), err.description);
 	}
 });
 
@@ -400,6 +424,13 @@ test('a parameter-flavoured capture failure is classified as invalid parameters'
 	failsWith('invalid_parameters', () =>
 		extractCaptureImage({ statusCode: 200, body: appErrorEnvelope('width out of range', 400) }),
 	);
+});
+
+test('the invalid-parameters advice names the options this node sends, not only the viewport', () => {
+	const err = failsWith('invalid_parameters', () =>
+		extractCaptureImage({ statusCode: 400, body: { message: 'Bad request' } }),
+	);
+	assert.ok(/viewport, delay, format/.test(err.description), err.description);
 });
 
 test('a 5xx is classified as the API being unavailable', () => {

@@ -133,6 +133,30 @@ test('the node exposes exactly one capture action and no extra operations', () =
 	assert.ok(!properties.some((p) => p.name === 'resource' || p.name === 'operation'));
 });
 
+test('adding the Delay option does not pre-fill a wait shorter than the API retry wait', () => {
+	// n8n fills a collection option with its default when it is added, and an
+	// explicit delay_time also replaces the 3000 ms wait of the API's own retry
+	// of an error-looking capture. A pre-filled 1000 ms would quietly shorten it.
+	const { SiteShot } = loadDist('nodes/SiteShot/SiteShot.node.js');
+	const options = new SiteShot().description.properties.find((p) => p.name === 'options').options;
+	const delay = options.find((o) => o.name === 'delay');
+
+	assert.equal(delay.default, 3000);
+	assert.ok(/Not sent unless added/.test(delay.description), delay.description);
+	assert.ok(/also used on that retry/.test(delay.description), delay.description);
+	assert.ok(/90 seconds plus twice the delay/.test(delay.description), delay.description);
+});
+
+test('Block Ads and Remove Cookie Banners do not promise to remove everything', () => {
+	// Both are list-based on the API side; a banner a site draws itself stays.
+	const { SiteShot } = loadDist('nodes/SiteShot/SiteShot.node.js');
+	const options = new SiteShot().description.properties.find((p) => p.name === 'options').options;
+	for (const name of ['blockAds', 'removeCookieBanners']) {
+		const { description } = options.find((o) => o.name === name);
+		assert.ok(/common/.test(description) && /may remain/.test(description), description);
+	}
+});
+
 test('the node exposes no header, JavaScript, proxy or free-form query inputs', () => {
 	const declared = JSON.stringify(new (loadDist('nodes/SiteShot/SiteShot.node.js').SiteShot)().description);
 	for (const forbidden of [
