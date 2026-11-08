@@ -4,6 +4,52 @@ An [n8n](https://n8n.io/) community node that captures a screenshot of a public
 web page with the [Site-Shot](https://www.site-shot.com/) API and passes it to
 the next node as binary data.
 
+## Quick start
+
+1. Install the node: search for **Site-Shot** in the n8n nodes panel (see
+   [Installation](#installation)).
+2. Copy your API key from the [Site-Shot quickstart](https://www.site-shot.com/start/)
+   (create a free account there if you have none).
+3. In n8n, create a **Site-Shot API** credential and paste the key into
+   **API Key**.
+4. Add the **Site-Shot** node after a trigger and enter the page address in
+   **URL**, for example `https://example.com/`.
+5. Run it. The screenshot is in the output's binary field `data`, ready for any
+   storage, upload or email node.
+
+To try it without building anything, paste this workflow into the n8n editor
+(copy it, then press Ctrl+V or Cmd+V on the canvas) and pick your credential on
+the Site-Shot node:
+
+```json
+{
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://example.com/",
+        "options": { "removeCookieBanners": true, "blockAds": true }
+      },
+      "name": "Site-Shot",
+      "type": "n8n-nodes-siteshot.siteShot",
+      "typeVersion": 1,
+      "position": [220, 0]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [[{ "node": "Site-Shot", "type": "main", "index": 0 }]]
+    }
+  }
+}
+```
+
 ## What it does
 
 One action: given an explicit `http://` or `https://` address, it returns a PNG,
@@ -17,8 +63,10 @@ include the Site-Shot SDK.
 
 ## Requirements
 
-- Self-hosted n8n with community nodes enabled. Only n8n 2.40.5 has been tested;
-  see [Compatibility](#compatibility).
+- n8n Cloud or self-hosted n8n. Site-Shot is
+  [an n8n-verified integration](https://n8n.io/integrations/site-shot/), so it
+  can be installed from the nodes panel on both; see
+  [Compatibility](#compatibility) for the versions tested.
 - A Site-Shot API key, from the
   [Site-Shot quickstart](https://www.site-shot.com/start/). A confirmed
   account's API key comes with the free plan: 100 API captures a month, no card
@@ -29,9 +77,15 @@ include the Site-Shot SDK.
 
 ## Installation
 
-The owner of a self-hosted n8n instance installs the node under
-**Settings → Community Nodes** by entering the package name,
-`n8n-nodes-siteshot`. The versions published to npm are listed on its
+- **n8n Cloud, or self-hosted n8n with verified community nodes:** open the
+  nodes panel, search for **Site-Shot** and install it. An instance owner or
+  admin does this once; see
+  [n8n's guide to installing verified community nodes](https://docs.n8n.io/integrations/community-nodes/installation-and-management/install-verified-community-nodes/).
+- **Self-hosted n8n otherwise:** the instance owner installs it under
+  **Settings → Community Nodes** by entering the package name,
+  `n8n-nodes-siteshot`.
+
+The versions published to npm are listed on its
 [npm page](https://www.npmjs.com/package/n8n-nodes-siteshot); a package of this
 name from anywhere else is not this project.
 
@@ -57,31 +111,10 @@ own code never reads it.
 
 ### The credential test and your quota
 
-The `/v1.0/credential-check` endpoint is live on the Site-Shot API. In the one
-live run with n8n 2.40.5 (see [Compatibility](#compatibility)), a credential
-test with a valid key succeeded and did not count against the account's quota;
-a capture counted once. The other results in the table above have not been seen
-through n8n against the live API.
-
-It is not only the **Test** button. n8n can run the test on its own: with n8n
-2.40.5, opening a saved credential sent a test without anything being clicked.
-Creating, opening and re-testing the credential can each send a request.
-
-### How n8n runs the credential test
-
-Measured with n8n 2.40.5 against a local stand-in for the API:
-
-- **A rejected key sends two requests.** n8n retries a credential test once
-  after a `401`. This package neither asks for that retry nor can switch it off.
-  A success or a `403` sends one request.
-- **The 10-second timeout applies to each attempt**, not to the whole test. A
-  stand-in that answered `401` after 6 seconds made the test take about 12
-  seconds. No overall limit is claimed.
-- Same-origin and cross-origin redirects were both refused, and the key never
-  reached the redirect target.
-
-The timeout is set in the credential's `authenticate` hook because n8n 2.40.5
-replaces any timeout declared on the test request itself.
+The credential test does not take a screenshot and does not count against your
+captures. n8n can run it on its own, for example when a saved credential is
+opened, so creating, opening and re-testing the credential can each send a
+request. How n8n runs the test is described in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Node reference
 
@@ -178,114 +211,33 @@ Limits, fixed in this version:
 
 ## Compatibility
 
-- **Tested:** n8n 2.40.5 only, in its official Docker image for linux/arm64
-  pinned by digest (Node 26.7.0, `n8n-core` 2.40.3, `n8n-workflow` 2.40.1).
-  Other n8n versions, other architectures and n8n Cloud have not been tested.
-  - **Against the live Site-Shot API, once:** with a pre-release build of this
-    package installed in that n8n, one credential test succeeded without
-    counting against the quota, and one workflow captured a 1024×768 PNG that
-    counted once. That single run covered only this success path.
-  - **Against a synthetic stand-in for the API only**, in an isolated local
-    environment with no internet access: rejected keys, timeouts, redirects,
-    API errors and failed captures.
+- **Tested:** n8n 2.40.5 and n8n 2.43.6, in their official Docker images for
+  linux/arm64, against the live Site-Shot API: installing the package, the
+  credential test, PNG, JPEG and WebP captures, a rejected key, an address that
+  does not exist, and Continue On Fail.
+  Other versions, other architectures and n8n Cloud itself have not been tested
+  by this project; on n8n Cloud the node is installed through the verified
+  listing.
 - **Package:** no runtime dependencies; `n8n-workflow` is a peer dependency
   that n8n provides.
-- **Development toolchain:** Node 24.21.0 and the npm it ships, 11.19.0.
-  npm 11.19.0 runs no dependency install script unless approved; none is
-  needed to build or verify this package.
 
 ## Development
 
-```bash
-npm ci
-npm run verify   # typecheck, build, test, lint
-```
-
-The tests are synthetic. They never contact the Site-Shot API, use a real key or
-take a screenshot; tests that need a socket use a stub on `127.0.0.1`. They
-also check the package itself: its name and metadata, exactly which files
-`npm pack` would include, the source maps, and the release path. Ordinary CI
-only verifies; only the separate, manual **Stage** workflow can stage a
-version, and only after the protected `npm-stage` environment is approved.
-Publishing a staged version is a separate, final step: the owner's approval on
-npm.
-
-[CI](.github/workflows/ci.yml) runs `npm ci` and `npm run verify` with the same
-Node and npm versions on pushes to `main`, on pull requests and on demand. It
-has read-only repository access and cannot publish.
-
-### Runtime fixture (local only)
-
-`runtime-fixture/runtime-gate.sh` runs the built package in the pinned n8n
-2.40.5 image on an isolated Docker network, against a synthetic API stand-in,
-and drives the editor's REST API. It is a local check, not part of CI. It needs
-Docker on an ARM64 machine, the pinned image already pulled, and the Python
-interpreter of a project `.venv` that has Pillow, passed explicitly:
-
-```bash
-runtime-fixture/runtime-gate.sh up /absolute/path/to/project/.venv/bin/python
-runtime-fixture/runtime-gate.sh status
-runtime-fixture/runtime-gate.sh down   # removes only resources it created
-```
-
-`down` and `status` do not need Python. The script's messages and comments are
-in Russian.
-
-## Release
-
-- CI only verifies. The stage workflow (`.github/workflows/stage.yml`) runs
-  only by hand and only stages; an ordinary push never publishes.
-- `repository` and `bugs` in `package.json` and the issue link below name this
-  repository, and the stage workflow refuses to run in any other.
-
-A release, step by step:
-
-1. A reviewed commit of `main` is packed independently, with the same
-   toolchain, and the tarball's SHA-256 is recorded. `npm pack` of the same
-   commit is byte for byte reproducible.
-2. A maintainer dispatches **Stage** on `main` with three values: the commit's
-   full SHA, its version and that SHA-256. The first job checks out exactly
-   that commit and refuses a different repository, commit or version, or a
-   private manifest. It then runs `npm ci`, the full `npm run verify` and packs
-   the tarball. It stops unless the tarball holds exactly the expected files
-   and has the given SHA-256. It has no secret and no OIDC token.
-3. After a reviewer approves the protected `npm-stage` environment, the second
-   job takes that tarball and checks its SHA-256 against the given one again;
-   it never takes a hash from the first job. Then it runs
-   `npm stage publish ./n8n-nodes-siteshot-<version>.tgz --provenance --access public`.
-   It checks out and installs nothing; the npm token exists only in that one,
-   last step.
-4. The first stage of a package that does not exist yet creates a public
-   `0.0.0-stage` placeholder on npm. The staged version itself stays
-   unpublished until the owner reviews it on npm and approves it with 2FA.
-   Before approval, the staged tarball and its provenance (subject and source
-   commit) are checked; after approval, the published version is checked on
-   npm.
-5. The October 1, 2026 `npm audit` of the locked install graph reports 14
-   findings: 5 moderate and 9 high. They include the CLI development chain and
-   the automatically installed `n8n-workflow` peer and its Axios dependency;
-   they are not all development-only. This package bundles no dependencies,
-   and n8n normally supplies the runtime peer. The audit does not establish an
-   exploit through this node, but it also does not show that the host n8n is
-   unaffected. Review the host version and upstream dependency advisories
-   before release.
-
-Why a tarball: `npm stage publish <file>.tgz` sends that file as it is and runs
-no lifecycle script, so the `prepublishOnly` guard (`n8n-node prerelease`) does
-not run there. The workflow's checks of repository, commit, version, full
-verification, packed files and the given SHA-256 are the release gate. The
-official `n8n-node release` command is not used: it publishes directly, and it
-runs only lint and build.
-
-Publishing to npm is separate from n8n verification. Site-Shot is now
-[listed as a verified integration by n8n](https://n8n.io/integrations/site-shot/).
-Instance owners and admins can use
-[n8n's verified-node installation guide](https://docs.n8n.io/integrations/community-nodes/installation-and-management/install-verified-community-nodes/).
-This project's documented runtime tests remain self-hosted; a verified listing
-is not an independent n8n Cloud execution test.
+Building, testing, the local runtime fixture and the release steps are in
+[DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Version history
 
+- **0.1.3:** new options **Block Ads**, **Remove Cookie Banners** and
+  **Delay (Ms)**, and the **WebP** format. All are off or unset by default, so
+  existing workflows send the same request. A page that cannot be opened, such
+  as a mistyped or non-existent address, is reported as such instead of as a
+  render timeout. A Format that is not `png`, `jpeg` or `webp` (for example from
+  an expression) is rejected before a request is sent; `jpg` and other letter
+  cases are accepted. The credential test explains a rejected key instead of
+  showing only "Unauthorized", and the credential's documentation link opens
+  the quickstart. With Continue On Fail, a failed item also carries
+  `errorReason`, `errorDescription` and `httpCode`.
 - **0.1.2:** the node and its credential describe the free plan and explain a
   `403` by the API's own message. The **API Key** field no longer says that a
   paid plan is required: a confirmed account's key comes with the free plan of
