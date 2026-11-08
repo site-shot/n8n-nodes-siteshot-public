@@ -58,7 +58,18 @@ export const IMAGE_FORMATS = {
 		signature: [0xff, 0xd8, 0xff],
 		dataUrlTypes: ['image/jpeg', 'image/jpg'],
 	},
+	webp: {
+		mimeType: 'image/webp',
+		fileName: 'screenshot.webp',
+		label: 'WebP',
+		/** "RIFF", a 4-byte size (any value, `null`), then "WEBP" */
+		signature: [0x52, 0x49, 0x46, 0x46, null, null, null, null, 0x57, 0x45, 0x42, 0x50],
+		dataUrlTypes: ['image/webp'],
+	},
 } as const;
+
+/** Range accepted for the Delay option, in milliseconds. */
+export const DELAY_LIMITS = { min: 0, max: 30_000 } as const;
 
 export type ImageFormat = keyof typeof IMAGE_FORMATS;
 
@@ -67,6 +78,9 @@ export interface CaptureOptions {
 	fullPage?: boolean;
 	width?: number;
 	height?: number;
+	blockAds?: boolean;
+	removeCookieBanners?: boolean;
+	delay?: number;
 }
 
 /** Machine-readable failure reasons. Stable contract for tests and callers. */
@@ -259,7 +273,7 @@ export function normalizeFormat(raw: unknown): ImageFormat {
 	);
 }
 
-/** Validate the optional viewport numbers against the API's accepted ranges. */
+/** Validate the optional viewport and delay numbers against the accepted ranges. */
 export function validateViewport(options: CaptureOptions): void {
 	for (const axis of ['width', 'height'] as const) {
 		const value = options[axis];
@@ -271,6 +285,20 @@ export function validateViewport(options: CaptureOptions): void {
 				`Viewport ${axis} must be a whole number between ${min} and ${max}.`,
 			);
 		}
+	}
+
+	const { delay } = options;
+	if (
+		delay !== undefined &&
+		(typeof delay !== 'number' ||
+			!Number.isInteger(delay) ||
+			delay < DELAY_LIMITS.min ||
+			delay > DELAY_LIMITS.max)
+	) {
+		throw new CaptureFailure(
+			'invalid_options',
+			`Delay must be a whole number of milliseconds between ${DELAY_LIMITS.min} and ${DELAY_LIMITS.max}.`,
+		);
 	}
 }
 
@@ -295,6 +323,9 @@ export function buildCaptureQuery(
 	if (options.fullPage === true) query.full_size = 1;
 	if (options.width !== undefined) query.width = options.width;
 	if (options.height !== undefined) query.height = options.height;
+	if (options.blockAds === true) query.no_ads = 1;
+	if (options.removeCookieBanners === true) query.no_cookie_popup = 1;
+	if (options.delay !== undefined) query.delay_time = options.delay;
 
 	return query;
 }
@@ -596,7 +627,7 @@ export function decodeCaptureImage(rawImage: string, format: ImageFormat): Buffe
 		);
 	}
 	for (let i = 0; i < signature.length; i++) {
-		if (buffer[i] !== signature[i]) {
+		if (signature[i] !== null && buffer[i] !== signature[i]) {
 			throw new CaptureFailure(
 				'format_mismatch',
 				`Site-Shot returned an image that is not ${spec.label}.`,

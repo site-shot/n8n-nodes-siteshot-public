@@ -6,8 +6,8 @@ the next node as binary data.
 
 ## What it does
 
-One action: given an explicit `http://` or `https://` address, it returns a PNG
-or JPEG screenshot in a binary field, ready for any storage, upload or email
+One action: given an explicit `http://` or `https://` address, it returns a PNG,
+JPEG or WebP screenshot in a binary field, ready for any storage, upload or email
 node downstream.
 
 There is no trigger, scheduling or storage, and no country selection,
@@ -89,8 +89,11 @@ replaces any timeout declared on the test request itself.
 | --- | --- | --- | --- |
 | **URL** | yes | — | Must start with `http://` or `https://`. Never rewritten or guessed. |
 | **Put Output File in Field** | yes | `data` | Name of the output binary field. |
-| **Options → Format** | no | `png` | `png` or `jpeg`. |
+| **Options → Block Ads** | no | off | Hides ads before the capture (`no_ads=1`). |
+| **Options → Delay (Ms)** | no | API default | Milliseconds to wait after the page loads, 0–30000 (`delay_time`). Leaving it unset is not a zero wait: the API applies its own. |
+| **Options → Format** | no | `png` | `png`, `jpeg` or `webp`. PNG and WebP are lossless; JPEG is lossy and smallest on photo-heavy pages. A WebP full-page capture taller than 16,383 px is cut at 16,383 px. An expression may also give `PNG`, `jpg` and so on; any other value is rejected before a request is sent. |
 | **Options → Full Page** | no | off | Captures the whole scrollable page. |
+| **Options → Remove Cookie Banners** | no | off | Removes cookie-consent banners and popups before the capture (`no_cookie_popup=1`). |
 | **Options → Viewport Width** | no | API default (1024) | 100–8000 px. |
 | **Options → Viewport Height** | no | API default (768) | 100–20000 px. |
 
@@ -120,14 +123,14 @@ size):
 ```
 
 Point the downstream node at the same field name. The file name is always
-`screenshot.png` or `screenshot.jpg`; rename it downstream if many captures go
+`screenshot.png`, `screenshot.jpg` or `screenshot.webp`; rename it downstream if many captures go
 to one destination.
 
 ## Cost, errors and limits
 
 **Captures are billable.** Every capture request the API accepts may count
 against your Site-Shot quota, including one that fails while rendering. The
-node checks the URL and viewport before sending anything, so invalid input is
+node checks the URL, viewport, delay and format before sending anything, so invalid input is
 rejected without a request. It never retries a capture, never falls back to
 another endpoint and never returns a placeholder result. If you enable n8n's
 **Retry On Fail**, each retry is another capture request.
@@ -136,7 +139,7 @@ another endpoint and never returns a placeholder result. If you enable n8n's
 answered with HTTP 200, an `error` field and a placeholder image. The node reads
 `error` on every response and produces no binary field unless the response
 holds a real image in the requested format. It also rejects missing, empty or
-malformed image data, a PNG returned for a JPEG request (and vice versa), and
+malformed image data, an image in a format other than the one requested, and
 responses that are not the expected JSON.
 
 | Situation | What the node reports |
@@ -152,7 +155,7 @@ responses that are not the expected JSON.
 | `Geotargeting needs a paid plan` | Site-Shot refuses a capture from a country other than the US on the free plan and returns an error instead of an image; the refused request still counts toward the month's 100. The node has no country option, so it does not ask for one itself. |
 | HTTP 5xx | The API is unavailable. |
 | Capture failed on an HTTP 200 | The page could not be captured. A status line from the page or proxy (such as `407 Proxy Authentication Required`) or a browser network error is never read as a key, quota or option problem. |
-| Invalid URL or viewport | Rejected before any request is sent. |
+| Invalid URL, viewport, delay or format | Rejected before any request is sent. |
 
 Error messages are written by this node. They include the HTTP status, and
 upstream wording only when it matches a short list of known reasons (plus a

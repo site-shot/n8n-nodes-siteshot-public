@@ -128,7 +128,7 @@ test('the node exposes exactly one capture action and no extra operations', () =
 	);
 	assert.deepEqual(
 		properties.find((p) => p.name === 'options').options.map((o) => o.name).sort(),
-		['format', 'fullPage', 'height', 'width'],
+		['blockAds', 'delay', 'format', 'fullPage', 'height', 'removeCookieBanners', 'width'],
 	);
 	assert.ok(!properties.some((p) => p.name === 'resource' || p.name === 'operation'));
 });

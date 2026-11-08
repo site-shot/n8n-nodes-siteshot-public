@@ -5,6 +5,8 @@ import {
 	JPEG_B64,
 	JPEG_BYTES,
 	PNG_B64,
+	WEBP_B64,
+	WEBP_BYTES,
 	createExecuteContext,
 	fullResponse,
 	loadDist,
@@ -76,6 +78,64 @@ test('capture options map onto the documented Site-Shot query parameters', async
 	assert.equal(qs.full_size, 1);
 	assert.equal(qs.width, 1280);
 	assert.equal(qs.height, 900);
+});
+
+test('ad blocking, cookie-banner removal and delay map onto no_ads, no_cookie_popup and delay_time', async () => {
+	const ctx = createExecuteContext({
+		params: {
+			url: 'https://example.com/',
+			binaryPropertyName: 'data',
+			options: { blockAds: true, removeCookieBanners: true, delay: 2500 },
+		},
+		transport: okPng(),
+	});
+
+	await run(ctx);
+
+	const { qs } = ctx.httpCalls[0].requestOptions;
+	assert.equal(qs.no_ads, 1);
+	assert.equal(qs.no_cookie_popup, 1);
+	assert.equal(qs.delay_time, 2500);
+});
+
+test('switched-off ad blocking and cookie-banner removal are not sent', async () => {
+	const ctx = createExecuteContext({
+		params: {
+			url: 'https://example.com/',
+			binaryPropertyName: 'data',
+			options: { blockAds: false, removeCookieBanners: false },
+		},
+		transport: okPng(),
+	});
+
+	await run(ctx);
+
+	const { qs } = ctx.httpCalls[0].requestOptions;
+	assert.deepEqual(Object.keys(qs).sort(), ['format', 'response_type', 'url']);
+});
+
+test('a WebP capture is returned with the WebP MIME type and extension', async () => {
+	const ctx = createExecuteContext({
+		params: { url: 'https://example.com/', binaryPropertyName: 'data', options: { format: 'webp' } },
+		transport: fullResponse({ image: `data:image/webp;base64,${WEBP_B64}` }),
+	});
+
+	const [output] = await run(ctx);
+
+	assert.equal(ctx.httpCalls[0].requestOptions.qs.format, 'webp');
+	assert.equal(output[0].binary.data.mimeType, 'image/webp');
+	assert.equal(ctx.binaryCalls[0].fileName, 'screenshot.webp');
+	assert.deepEqual(ctx.binaryCalls[0].buffer, WEBP_BYTES);
+});
+
+test('a PNG returned for a WebP request is refused', async () => {
+	const ctx = createExecuteContext({
+		params: { url: 'https://example.com/', binaryPropertyName: 'data', options: { format: 'webp' } },
+		transport: okPng(),
+	});
+
+	await assert.rejects(run(ctx), /not WebP/);
+	assert.equal(ctx.binaryCalls.length, 0);
 });
 
 test('unset capture options are omitted so the API applies its own defaults', async () => {

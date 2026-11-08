@@ -66,6 +66,22 @@ export class SiteShot implements INodeType {
 				default: {},
 				options: [
 					{
+						displayName: 'Block Ads',
+						name: 'blockAds',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to hide ads on the page before it is captured',
+					},
+					{
+						displayName: 'Delay (Ms)',
+						name: 'delay',
+						type: 'number',
+						default: 1000,
+						typeOptions: { minValue: 0, maxValue: 30000 },
+						description:
+							'Milliseconds to wait after the page loads before capturing, between 0 and 30000. Useful for pages that animate or load content late. If not set, Site-Shot applies its own wait.',
+					},
+					{
 						displayName: 'Format',
 						name: 'format',
 						type: 'options',
@@ -74,6 +90,12 @@ export class SiteShot implements INodeType {
 						options: [
 							{ name: 'PNG', value: 'png' },
 							{ name: 'JPEG', value: 'jpeg' },
+							{
+								name: 'WebP',
+								value: 'webp',
+								description:
+									'Lossless. A full-page capture taller than 16,383 px is cut at 16,383 px.',
+							},
 						],
 					},
 					{
@@ -83,6 +105,13 @@ export class SiteShot implements INodeType {
 						default: false,
 						description:
 							'Whether to capture the whole scrollable page instead of just the viewport',
+					},
+					{
+						displayName: 'Remove Cookie Banners',
+						name: 'removeCookieBanners',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to remove cookie-consent banners and popups before capturing',
 					},
 					{
 						displayName: 'Viewport Height',

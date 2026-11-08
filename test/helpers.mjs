@@ -38,7 +38,15 @@ export const JPEG_BYTES = Buffer.concat([
 	Buffer.from([0xff, 0xd9]),
 ]);
 
+/** A correctly signed WebP header: "RIFF", a little-endian size, "WEBP", "VP8L". */
+export const WEBP_BYTES = Buffer.concat([
+	Buffer.from('RIFF', 'ascii'),
+	Buffer.from([0x0c, 0x00, 0x00, 0x00]),
+	Buffer.from('WEBPVP8L', 'ascii'),
+]);
+
 export const PNG_B64 = PNG_BYTES.toString('base64');
+export const WEBP_B64 = WEBP_BYTES.toString('base64');
 export const JPEG_B64 = JPEG_BYTES.toString('base64');
 
 /**

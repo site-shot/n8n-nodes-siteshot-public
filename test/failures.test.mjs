@@ -66,6 +66,21 @@ test('an out-of-range viewport fails before any request is made', async () => {
 	assert.ok(/between 100 and 8000/.test(err.message), err.message);
 });
 
+test('a Delay outside 0 to 30000 ms fails before any request is made', async () => {
+	for (const delay of [-1, 30001, 1.5, '500']) {
+		const ctx = createExecuteContext({
+			params: { ...baseParams, options: { delay } },
+			transport: fullResponse({ image: PNG_B64 }),
+		});
+
+		const err = await capture(ctx);
+
+		assert.equal(ctx.httpCalls.length, 0, `delay ${delay} reached the API`);
+		assert.equal(err.constructor.name, 'NodeOperationError');
+		assert.ok(/between 0 and 30000/.test(err.message), err.message);
+	}
+});
+
 test('an unknown Format from an expression fails before any request is made', async () => {
 	for (const format of ['gif', 'tiff', 42]) {
 		const ctx = createExecuteContext({
