@@ -15,11 +15,11 @@ import {
 	buildCaptureQuery,
 	decodeCaptureImage,
 	extractCaptureImage,
+	normalizeFormat,
 	toCaptureFailure,
 	validateTargetUrl,
 	validateViewport,
 	type CaptureOptions,
-	type ImageFormat,
 } from './capture';
 
 /** Reasons that are the user's own input, not something the API said. */
@@ -116,13 +116,13 @@ export class SiteShot implements INodeType {
 				const url = validateTargetUrl(this.getNodeParameter('url', itemIndex, ''));
 				const options = this.getNodeParameter('options', itemIndex, {}) as CaptureOptions;
 				validateViewport(options);
+				const format = normalizeFormat(options.format);
 
 				const binaryPropertyName = this.getNodeParameter(
 					'binaryPropertyName',
 					itemIndex,
 					'data',
 				) as string;
-				const format = (options.format ?? 'png') as ImageFormat;
 				const spec = IMAGE_FORMATS[format];
 
 				const response = await this.helpers.httpRequestWithAuthentication.call(

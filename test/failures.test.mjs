@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+	JPEG_B64,
 	PNG_B64,
 	SECRET_KEY,
 	SECRET_TARGET_TOKEN,
@@ -63,6 +64,41 @@ test('an out-of-range viewport fails before any request is made', async () => {
 	assert.equal(ctx.httpCalls.length, 0);
 	assert.equal(err.constructor.name, 'NodeOperationError');
 	assert.ok(/between 100 and 8000/.test(err.message), err.message);
+});
+
+test('an unknown Format from an expression fails before any request is made', async () => {
+	for (const format of ['gif', 'tiff', 42]) {
+		const ctx = createExecuteContext({
+			params: { ...baseParams, options: { format } },
+			transport: fullResponse({ image: PNG_B64 }),
+		});
+
+		const err = await capture(ctx);
+
+		assert.equal(ctx.httpCalls.length, 0, `format ${format} reached the API`);
+		assert.equal(err.constructor.name, 'NodeOperationError');
+		assert.ok(/^Format must be one of: png, jpeg/.test(err.message), err.message);
+		assert.ok(!/credential/i.test(err.message), err.message);
+	}
+});
+
+test('a Format in another case, or spelled jpg, is normalised before it is sent', async () => {
+	for (const [format, sent] of [
+		['PNG', 'png'],
+		[' png ', 'png'],
+		['jpg', 'jpeg'],
+		['JPEG', 'jpeg'],
+	]) {
+		const ctx = createExecuteContext({
+			params: { ...baseParams, options: { format } },
+			transport: fullResponse({ image: sent === 'png' ? PNG_B64 : JPEG_B64 }),
+		});
+
+		const [output] = await run(ctx);
+
+		assert.equal(ctx.httpCalls[0].requestOptions.qs.format, sent);
+		assert.equal(output[0].binary.data.mimeType, `image/${sent}`);
+	}
 });
 
 // ---------------------------------------------------------------------------

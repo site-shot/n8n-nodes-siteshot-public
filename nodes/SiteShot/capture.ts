@@ -240,6 +240,25 @@ export function validateTargetUrl(raw: unknown): string {
 	return trimmed;
 }
 
+/**
+ * Normalise the Format option before anything is sent.
+ *
+ * The option is a dropdown, but an expression can supply any value, and n8n
+ * does not check it. Case and the common `jpg` spelling are accepted; anything
+ * else is refused here, because a request in an unknown format would still
+ * spend a capture and then fail on the response.
+ */
+export function normalizeFormat(raw: unknown): ImageFormat {
+	if (raw === undefined || raw === null || raw === '') return 'png';
+	const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+	const format = value === 'jpg' ? 'jpeg' : value;
+	if (Object.prototype.hasOwnProperty.call(IMAGE_FORMATS, format)) return format as ImageFormat;
+	throw new CaptureFailure(
+		'invalid_options',
+		`Format must be one of: ${Object.keys(IMAGE_FORMATS).join(', ')}.`,
+	);
+}
+
 /** Validate the optional viewport numbers against the API's accepted ranges. */
 export function validateViewport(options: CaptureOptions): void {
 	for (const axis of ['width', 'height'] as const) {
@@ -270,7 +289,7 @@ export function buildCaptureQuery(
 	const query: Record<string, string | number> = {
 		url,
 		response_type: 'json',
-		format: options.format ?? 'png',
+		format: normalizeFormat(options.format),
 	};
 
 	if (options.fullPage === true) query.full_size = 1;
