@@ -55,8 +55,8 @@ Cookie Banners** and **Delay (Ms)**, and the **WebP** format, need version 0.1.3
 or later. The nodes panel and n8n Cloud install the version that n8n has
 verified, which can be older; if the node's **Options** offer no **Block Ads**,
 the installed version is older than 0.1.3. On self-hosted n8n, the instance
-owner can install 0.1.3 under **Settings → Community Nodes** by entering
-`n8n-nodes-siteshot@0.1.3`.
+owner can install it under **Settings → Community Nodes** by entering
+`n8n-nodes-siteshot@0.1.4`.
 
 ## What it does
 
@@ -92,7 +92,7 @@ include the Site-Shot SDK.
 - **Self-hosted n8n otherwise:** the instance owner installs it under
   **Settings → Community Nodes** by entering the package name,
   `n8n-nodes-siteshot`. To install one exact version, add it to the name, for
-  example `n8n-nodes-siteshot@0.1.3`.
+  example `n8n-nodes-siteshot@0.1.4`.
 
 The nodes panel and n8n Cloud install the version that n8n has verified, which
 can lag behind npm. The options **Block Ads**, **Remove Cookie Banners** and
@@ -252,6 +252,11 @@ Building, testing, the local runtime fixture and the release steps are in
 
 ## Version history
 
+- **0.1.4:** a search for "screenshot", "capture" or "full page" in the n8n
+  nodes panel finds the node. The panel searches only a node's name and its
+  codex aliases, and "Site-Shot" does not match "screenshot", so before this
+  only a search for the name found it. The node's code, credential and requests
+  are unchanged.
 - **0.1.3:** the first release after 0.1.1. Version 0.1.2 was not published to
   npm, so 0.1.3 also carries the 0.1.2 changes listed below. New options
   **Block Ads**, **Remove Cookie Banners** and **Delay (Ms)**, and the

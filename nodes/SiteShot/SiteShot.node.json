@@ -3,6 +3,7 @@
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Development"],
+	"alias": ["Screenshot", "Website Screenshot", "Web Page", "Capture", "Full Page", "Snapshot", "Thumbnail", "PNG"],
 	"resources": {
 		"credentialDocumentation": [{ "url": "https://www.site-shot.com/start/" }],
 		"primaryDocumentation": [{ "url": "https://www.site-shot.com/#documentation" }]

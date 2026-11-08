@@ -220,6 +220,32 @@ const COMMUNITY_NODE_CATEGORIES = new Set([
 const unsupportedCategories = (categories) =>
 	categories.filter((category) => !COMMUNITY_NODE_CATEGORIES.has(category));
 
+// n8n's nodes panel searches only a node's displayName and its codex alias
+// (@n8n/utils sublime-search DEFAULT_KEYS), and a pattern matches when its
+// letters appear in order. "Site-Shot" has no "c", so without an alias a search
+// for "screenshot" never shows this node.
+const fuzzyMatchSimple = (pattern, target) => {
+	let at = 0;
+	const text = target.toLowerCase();
+	for (const ch of pattern.toLowerCase()) {
+		at = text.indexOf(ch, at);
+		if (at === -1) return false;
+		at += 1;
+	}
+	return true;
+};
+
+test('a nodes-panel search for screenshot finds the node through its codex alias', () => {
+	const { alias } = readJson('nodes/SiteShot/SiteShot.node.json');
+	assert.equal(fuzzyMatchSimple('screenshot', 'Site-Shot'), false, 'the display name alone does not match');
+	for (const query of ['screenshot', 'website screenshot', 'capture', 'full page']) {
+		assert.ok(
+			Array.isArray(alias) && alias.some((name) => fuzzyMatchSimple(query, name)),
+			`no alias matches "${query}"`,
+		);
+	}
+});
+
 test('the node codex lists only a category n8n accepts for a community node', () => {
 	const { categories } = readJson('nodes/SiteShot/SiteShot.node.json');
 	assert.deepEqual(categories, ['Development']);
