@@ -52,7 +52,7 @@ own code never reads it.
 | Test result | Meaning |
 | --- | --- |
 | success | The key was accepted. |
-| `401` | The key is missing or not recognised. |
+| `401` | The key is missing or not recognised. n8n shows: "Site-Shot did not recognise this API key. Copy it again from https://www.site-shot.com/start/, without spaces." |
 | `403` | The key is valid, but the account has no active subscription, or its free plan is used up for this month. |
 
 ### The credential test and your quota

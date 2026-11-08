@@ -296,6 +296,22 @@ test('the credential test cannot reach the capture endpoint', () => {
 	assert.ok(!/screenshot|download|fetch-ephemeral/.test(request.url));
 });
 
+test('a rejected key gets an actionable message, not the bare "Unauthorized"', () => {
+	const { rules } = new SiteShotApi().test;
+
+	const rejected = rules.find((rule) => rule.properties.value === 401);
+	assert.ok(rejected, 'a 401 rule must exist');
+	assert.equal(rejected.type, 'responseCode');
+	const { message } = rejected.properties;
+	assert.ok(/did not recognise this API key/.test(message), message);
+	assert.ok(message.includes('https://www.site-shot.com/start/'), message);
+	assert.ok(!/pricing/.test(message), message);
+});
+
+test('the credential documentation is the quickstart, where the key is shown', () => {
+	assert.equal(new SiteShotApi().documentationUrl, 'https://www.site-shot.com/start/');
+});
+
 test('an inactive subscription is reported distinctly from a bad key', () => {
 	const { rules } = new SiteShotApi().test;
 

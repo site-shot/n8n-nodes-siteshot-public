@@ -60,7 +60,7 @@ export class SiteShotApi implements ICredentialType {
 
 	displayName = 'Site-Shot API';
 
-	documentationUrl = 'https://www.site-shot.com/#documentation';
+	documentationUrl = 'https://www.site-shot.com/start/';
 
 	icon = 'file:icons/SiteShot.svg' as const;
 
@@ -138,6 +138,16 @@ export class SiteShotApi implements ICredentialType {
 			allowedDomains: 'api.site-shot.com',
 		},
 		rules: [
+			{
+				// Without this rule n8n shows only the bare status text,
+				// "Unauthorized", for a key Site-Shot does not recognise.
+				type: 'responseCode',
+				properties: {
+					value: 401,
+					message:
+						'Site-Shot did not recognise this API key. Copy it again from https://www.site-shot.com/start/, without spaces.',
+				},
+			},
 			{
 				// A valid key on a lapsed plan, or on a free plan whose captures
 				// for the month are used up: the key itself is fine, and saying
