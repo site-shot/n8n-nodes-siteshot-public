@@ -200,8 +200,13 @@ export class SiteShot implements INodeType {
 				const failure = toCaptureFailure(error);
 
 				if (this.continueOnFail()) {
+					// The same safe fields an error would carry, so a workflow can
+					// branch on the reason instead of parsing the message.
+					const details: IDataObject = { error: failure.message, errorReason: failure.reason };
+					if (failure.description !== undefined) details.errorDescription = failure.description;
+					if (failure.httpCode !== undefined) details.httpCode = failure.httpCode;
 					output.push({
-						json: { ...items[itemIndex].json, error: failure.message },
+						json: { ...items[itemIndex].json, ...details },
 						pairedItem: { item: itemIndex },
 					});
 					continue;

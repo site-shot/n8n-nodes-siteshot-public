@@ -376,6 +376,28 @@ test('continueOnFail keeps the item, its pairing and its JSON, with no binary', 
 	assert.equal(output[0].binary, undefined, 'a failed item must carry no binary');
 });
 
+test('continueOnFail carries the failure reason, description and HTTP status', async () => {
+	const ctx = createExecuteContext({
+		items: [{ json: { id: 1 } }, { json: { id: 2 } }],
+		params: {
+			url: (i) => (i === 0 ? 'not-a-url' : 'https://example.com/'),
+			binaryPropertyName: 'data',
+		},
+		transport: fullResponse({ message: 'Invalid authentication credentials' }, 401),
+		continueOnFail: true,
+	});
+
+	const [output] = await run(ctx);
+
+	assert.equal(output[0].json.errorReason, 'invalid_url');
+	assert.ok(/full address of a public page/.test(output[0].json.errorDescription));
+	assert.equal(output[0].json.httpCode, undefined);
+	assert.equal(output[1].json.errorReason, 'invalid_api_key');
+	assert.equal(output[1].json.httpCode, '401');
+	assert.ok(output[1].json.errorDescription.includes('https://www.site-shot.com/start/'));
+	assert.equal(output[1].json.id, 2);
+});
+
 test('continueOnFail isolates one bad item without losing the good ones', async () => {
 	const ctx = createExecuteContext({
 		items: [{ json: { id: 1 } }, { json: { id: 2 } }, { json: { id: 3 } }],

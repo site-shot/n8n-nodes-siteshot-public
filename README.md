@@ -162,8 +162,10 @@ upstream wording only when it matches a short list of known reasons (plus a
 used-up free plan's renewal date, when it has the exact `YYYY-MM-DD (UTC)`
 form); they never include the API key, the request address, headers or
 response bodies. The node writes no logs. With **Continue On Fail** enabled, a
-failed item keeps its input JSON and pairing, gains an `error` message and has
-no binary field.
+failed item keeps its input JSON and pairing and has no binary field. It gains
+`error` (the message), `errorReason` (a stable code such as `invalid_api_key`,
+`page_unreachable` or `subscription_inactive`), `errorDescription` (what to do)
+and, when the API answered, `httpCode`.
 
 Limits, fixed in this version:
 
