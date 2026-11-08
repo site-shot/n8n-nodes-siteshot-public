@@ -147,6 +147,19 @@ test('an unreachable page (error_code proxy_navigation_failed) is not reported a
 	assert.ok(!/timed out|simpler page/i.test(`${err.message} ${err.description}`));
 });
 
+test('error_code dns_lookup_failed is an unreachable page too', () => {
+	// The API's own code for a host that does not resolve, once the
+	// honest-errors API change ships.
+	const body = {
+		...appErrorEnvelope('Host not found: nonexistent-host.invalid. Check the URL for typos.', '', ''),
+		image: 'data:image/png;base64,',
+		error_code: 'dns_lookup_failed',
+	};
+	const err = failsWith('page_unreachable', () => extractCaptureImage({ statusCode: 200, body }));
+	assert.equal(err.message, 'Site-Shot could not open the page (dns_lookup_failed).');
+	assert.ok(/spelled correctly/.test(err.description), err.description);
+});
+
 test('error_code country_unavailable is read even when the error text differs', () => {
 	const body = { error: 'No proxy available', error_code: 'country_unavailable' };
 	failsWith('country_unavailable', () => extractCaptureImage({ statusCode: 200, body }));

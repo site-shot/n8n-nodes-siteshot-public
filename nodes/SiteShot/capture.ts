@@ -181,11 +181,13 @@ const TARGET_NOT_ALLOWED_PREFIX = 'forbidden target address';
 const COUNTRY_NEEDS_PAID_PLAN_PREFIX = 'geotargeting needs a paid plan';
 
 /**
- * `error_code` the API sends in JSON mode when the browser could not open the
- * page at all, e.g. an address that does not resolve. Its `error` text then
- * reads "504 Gateway Timeout", which must not be reported as a slow page.
+ * `error_code`s the API sends in JSON mode when the browser could not open the
+ * page at all. `proxy_navigation_failed` covers an address that does not
+ * resolve today, and its `error` text then reads "504 Gateway Timeout", which
+ * must not be reported as a slow page. `dns_lookup_failed` is the API's own
+ * code for a host that does not resolve once that API change ships.
  */
-const PAGE_UNREACHABLE_CODE = 'proxy_navigation_failed';
+const PAGE_UNREACHABLE_CODES = new Set(['proxy_navigation_failed', 'dns_lookup_failed']);
 
 /** An HTTP status line or a browser network error, as the page side reports it. */
 const PAGE_SIDE_ERROR = /^(\d{3}\b|net::err_)/;
@@ -362,10 +364,10 @@ function classifyFailure(
 
 	// `error_code` is the API's own machine-readable reason, so it is read
 	// before any wording in `error`.
-	if (code === PAGE_UNREACHABLE_CODE) {
+	if (PAGE_UNREACHABLE_CODES.has(code)) {
 		return new CaptureFailure(
 			'page_unreachable',
-			`Site-Shot could not open the page (${PAGE_UNREACHABLE_CODE}).`,
+			`Site-Shot could not open the page (${code}).`,
 			{
 				httpCode,
 				description:
