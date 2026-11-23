@@ -212,3 +212,47 @@ test('each item keeps its own files, on success and on failure', async () => {
 	assert.deepEqual(badOut.map((i) => i.pairedItem), [{ item: 0 }, { item: 1 }]);
 	assert.notEqual(badOut[0].binary, items[0].binary);
 });
+
+test('a field name that is not a string is read the same way on success and on failure', async () => {
+	const stale = { data: 'stale', fileName: 'screenshot.png', mimeType: 'image/png' };
+	const other = { data: 'other', fileName: 'a.pdf', mimeType: 'application/pdf' };
+	const items = [{ json: {}, binary: { 2: stale, data: other } }];
+
+	const ok = createExecuteContext({
+		items,
+		params: { url: 'https://target.example/page', binaryPropertyName: 2 },
+		transport: fullResponse({ image: PNG_B64 }),
+	});
+	const [okOut] = await run(ok);
+	assert.deepEqual(Object.keys(okOut[0].binary).sort(), ['2', 'data']);
+	assert.notEqual(okOut[0].binary['2'].data, 'stale');
+
+	const bad = createExecuteContext({
+		items,
+		params: { url: 'not a url', binaryPropertyName: 2 },
+		continueOnFail: true,
+	});
+	const [badOut] = await run(bad);
+	assert.deepEqual(Object.keys(badOut[0].binary), ['data']);
+});
+
+test('when the field name itself cannot be read, a failed item keeps every earlier file', async () => {
+	const fileA = { data: 'a', fileName: 'a.jpg', mimeType: 'image/jpeg' };
+	const fileData = { data: 'd', fileName: 'd.pdf', mimeType: 'application/pdf' };
+	const ctx = createExecuteContext({
+		items: [{ json: {}, binary: { a: fileA, data: fileData } }],
+		params: {
+			url: 'https://target.example/page',
+			binaryPropertyName: () => {
+				throw new Error('expression failed');
+			},
+		},
+		continueOnFail: true,
+	});
+
+	const [output] = await run(ctx);
+
+	assert.equal(ctx.httpCalls.length, 0);
+	assert.ok(output[0].json.error);
+	assert.deepEqual(Object.keys(output[0].binary).sort(), ['a', 'data']);
+});

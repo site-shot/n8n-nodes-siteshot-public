@@ -33,15 +33,15 @@ function withoutField(binary: IBinaryKeyData | undefined, field: string): IBinar
 }
 
 /**
- * The output field for an item, read again on failure: the capture may have
- * failed before it was read, and reading it can itself throw.
+ * The output field for an item, read again on failure (the capture may have
+ * failed before it was read) and turned into a string as the success path does.
+ * `null` when reading it throws: then there is no output field to drop.
  */
-function outputFieldOf(ctx: IExecuteFunctions, itemIndex: number): string {
+function outputFieldOf(ctx: IExecuteFunctions, itemIndex: number): string | null {
 	try {
-		const name = ctx.getNodeParameter('binaryPropertyName', itemIndex, 'data');
-		return typeof name === 'string' ? name : 'data';
+		return String(ctx.getNodeParameter('binaryPropertyName', itemIndex, 'data'));
 	} catch {
-		return 'data';
+		return null;
 	}
 }
 
@@ -71,7 +71,7 @@ export class SiteShot implements INodeType {
 				type: 'string',
 				required: true,
 				default: '',
-				placeholder: 'https://example.com/pricing',
+				placeholder: 'https://www.site-shot.com/pricing/',
 				description:
 					'Full address of the public page to capture. Must start with http:// or https://.',
 			},
@@ -178,11 +178,9 @@ export class SiteShot implements INodeType {
 				const format = normalizeFormat(options.format);
 				timeoutMs = requestTimeoutFor(options);
 
-				const binaryPropertyName = this.getNodeParameter(
-					'binaryPropertyName',
-					itemIndex,
-					'data',
-				) as string;
+				const binaryPropertyName = String(
+					this.getNodeParameter('binaryPropertyName', itemIndex, 'data'),
+				);
 				const spec = IMAGE_FORMATS[format];
 
 				const response = await this.helpers.httpRequestWithAuthentication.call(
@@ -218,7 +216,8 @@ export class SiteShot implements INodeType {
 					json: items[itemIndex].json,
 					// From 1.1, files from earlier nodes stay on the item. The screenshot
 					// comes first, so a node that takes an item's first file (Respond to
-					// Webhook, automatic) still gets it.
+					// Webhook, automatic) still gets it — unless an earlier file's field
+					// name is a whole number, which JavaScript always orders first.
 					binary: {
 						[binaryPropertyName]: await this.helpers.prepareBinaryData.call(
 							this,
@@ -249,8 +248,10 @@ export class SiteShot implements INodeType {
 					// From 1.1, files from earlier nodes stay on a failed item too, but
 					// never one in the output field: a failure must not look like a
 					// screenshot.
-					if (keepInputFiles) {
-						const kept = withoutField(items[itemIndex].binary, outputFieldOf(this, itemIndex));
+					if (keepInputFiles && items[itemIndex].binary) {
+						const field = outputFieldOf(this, itemIndex);
+						const kept =
+							field === null ? { ...items[itemIndex].binary } : withoutField(items[itemIndex].binary, field);
 						if (Object.keys(kept).length > 0) failed.binary = kept;
 					}
 					output.push(failed);

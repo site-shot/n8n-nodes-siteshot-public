@@ -269,7 +269,7 @@ export function validateTargetUrl(raw: unknown): string {
 	const invalid = (detail: string) =>
 		new CaptureFailure('invalid_url', `The URL parameter ${detail}.`, {
 			description:
-				'Enter the full address of a public page, including the scheme — for example https://example.com/pricing.',
+				'Enter the full address of a public page, including the scheme — for example https://www.site-shot.com/pricing/.',
 		});
 
 	if (typeof raw !== 'string') throw invalid('must be a text value');

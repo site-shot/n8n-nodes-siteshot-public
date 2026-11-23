@@ -14,7 +14,7 @@ the next node as binary data.
 3. In n8n, create a **Site-Shot API** credential and paste the key into
    **API Key**.
 4. Add the **Site-Shot** node after a trigger and enter the page address in
-   **URL**, for example `https://example.com/`.
+   **URL**, for example `https://www.site-shot.com/`.
 5. Run it. The screenshot is in the output's binary field `data`, ready for any
    storage, upload or email node.
 
@@ -34,11 +34,10 @@ the Site-Shot node:
     },
     {
       "parameters": {
-        "url": "https://example.com/"
+        "url": "https://www.site-shot.com/"
       },
       "name": "Site-Shot",
       "type": "n8n-nodes-siteshot.siteShot",
-      "typeVersion": 1,
       "position": [220, 0]
     }
   ],
@@ -50,7 +49,8 @@ the Site-Shot node:
 }
 ```
 
-The example works with every version. The options **Block Ads**, **Remove
+The example works with every version; it names no node version, so n8n gives
+the Site-Shot node the newest one installed. The options **Block Ads**, **Remove
 Cookie Banners** and **Delay (Ms)**, and the **WebP** format, need version 0.1.3
 or later. The nodes panel and n8n Cloud install the version that n8n has
 verified, which can be older; if the node's **Options** offer no **Block Ads**,
@@ -150,7 +150,7 @@ re-testing the credential can each send a request. How n8n runs the test is desc
 | **Options → Viewport Height** | no | API default (768) | 100–20000 px. |
 
 Options you leave unset are not sent, so the API applies its own defaults. A bare
-`example.com` is rejected rather than given a scheme, and so are addresses with
+`www.site-shot.com` is rejected rather than given a scheme, and so are addresses with
 embedded credentials (`https://user:pass@host/`) or control characters.
 
 ## Output
@@ -161,12 +161,18 @@ JSON unchanged and the screenshot in the binary field.
 From package 0.1.5, a Site-Shot node added to a workflow is node version 1.1,
 and files that earlier nodes put on the item stay there: only the output field
 is set or replaced, so two Site-Shot nodes in a row (say `desktop` and `mobile`)
-leave both screenshots on the item. The screenshot is the item's first file, so
-a node that takes the first file (such as Respond to Webhook set to binary,
-automatic) still gets it; a node that takes every file (such as an AI Agent
+leave both screenshots on the item. The screenshot is the item's first file
+(unless an earlier file's field name is a whole number such as `0`, which
+JavaScript always orders first), so a node that takes the first file (such as
+Respond to Webhook set to binary, automatic) still gets it; a node that takes every file (such as an AI Agent
 passing images on) gets the kept files too. Site-Shot nodes already saved in a
-workflow stay at version 1 and keep the old output, the screenshot alone; to
-switch one, add a new Site-Shot node in its place. For example, a workflow
+workflow, or pasted from JSON that says `"typeVersion": 1`, stay at version 1
+and keep the old output, the screenshot alone; to switch one, add a new
+Site-Shot node from the nodes panel in its place. The node's **Settings** tab
+shows its version. A workflow with a version 1.1 node needs package 0.1.5 or
+later to open: where an older version is installed (including the verified
+version on n8n Cloud until n8n verifies 0.1.5), that node shows as not
+installed. For example, a workflow
 **Manual Trigger → Site-Shot → (any node that takes a binary file)** with the
 defaults produces an item like this (abbreviated; n8n adds the file data and
 size):
