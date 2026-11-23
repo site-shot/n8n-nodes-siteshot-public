@@ -12,6 +12,7 @@ import {
 	CREDENTIALS_NAME,
 	IMAGE_FORMATS,
 	REQUEST_TIMEOUT_MS,
+	USER_AGENT,
 	buildCaptureQuery,
 	decodeCaptureImage,
 	extractCaptureImage,
@@ -168,6 +169,7 @@ export class SiteShot implements INodeType {
 						url: API_ENDPOINT,
 						qs: buildCaptureQuery(url, options) as IDataObject,
 						json: true,
+						headers: { 'User-Agent': USER_AGENT },
 						// Statuses are classified here rather than by the transport, so a
 						// 401 can be told apart from a 403 and from an HTTP 200 that
 						// carries a capture failure.
@@ -190,7 +192,10 @@ export class SiteShot implements INodeType {
 
 				output.push({
 					json: items[itemIndex].json,
+					// Files from earlier nodes stay on the item; only the output field
+					// is set (or replaced) by this capture.
 					binary: {
+						...(items[itemIndex].binary ?? {}),
 						[binaryPropertyName]: await this.helpers.prepareBinaryData.call(
 							this,
 							buffer,
@@ -212,10 +217,13 @@ export class SiteShot implements INodeType {
 					const details: IDataObject = { error: failure.message, errorReason: failure.reason };
 					if (failure.description !== undefined) details.errorDescription = failure.description;
 					if (failure.httpCode !== undefined) details.httpCode = failure.httpCode;
-					output.push({
+					const failed: INodeExecutionData = {
 						json: { ...items[itemIndex].json, ...details },
 						pairedItem: { item: itemIndex },
-					});
+					};
+					// Files from earlier nodes stay on the item on failure too.
+					if (items[itemIndex].binary) failed.binary = items[itemIndex].binary;
+					output.push(failed);
 					continue;
 				}
 

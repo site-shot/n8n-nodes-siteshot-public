@@ -223,7 +223,8 @@ test('the credential test declares no credential of its own', () => {
 	// declaration here would be the thing that drifts.
 	const { request } = new SiteShotApi().test;
 
-	assert.equal(request.headers, undefined);
+	// Its only header is the package's User-Agent.
+	assert.deepEqual(Object.keys(request.headers), ['User-Agent']);
 	assert.equal(request.auth, undefined);
 	assert.ok(!JSON.stringify(request).includes('apiKey'));
 	assert.ok(!JSON.stringify(request).includes('userkey'));
@@ -244,6 +245,7 @@ test('the credential test carries no URL, body, account id or other PII', () => 
 			'allowedDomains',
 			'baseURL',
 			'disableFollowRedirect',
+			'headers',
 			'method',
 			'sendCredentialsOnCrossOriginRedirect',
 			'url',
@@ -309,7 +311,7 @@ test('a rejected key gets an actionable message, not the bare "Unauthorized"', (
 });
 
 test('the credential documentation is the quickstart, where the key is shown', () => {
-	assert.equal(new SiteShotApi().documentationUrl, 'https://www.site-shot.com/start/');
+	assert.equal(new SiteShotApi().documentationUrl, 'https://www.site-shot.com/start/?utm_source=n8n&utm_medium=integration&utm_campaign=n8n_node');
 });
 
 test('an inactive subscription is reported distinctly from a bad key', () => {
@@ -329,4 +331,14 @@ test('an inactive subscription is reported distinctly from a bad key', () => {
 	// the instruction, not on the words "API key".
 	assert.ok(!/(check|invalid|rejected|wrong|incorrect)[^.]*\bkey\b/i.test(message), message);
 	assert.ok(!/\bkey\b[^.]*(invalid|rejected|wrong|incorrect)/i.test(message), message);
+});
+
+test('the credential test sends the same User-Agent as a capture, with the package version', async () => {
+	const { readFileSync } = await import('node:fs');
+	const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+	const { USER_AGENT } = loadDist('nodes/SiteShot/capture.js');
+	const { request } = new SiteShotApi().test;
+
+	assert.equal(request.headers['User-Agent'], `n8n-nodes-siteshot/${pkg.version} (n8n)`);
+	assert.equal(request.headers['User-Agent'], USER_AGENT);
 });

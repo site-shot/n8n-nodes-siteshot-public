@@ -20,6 +20,12 @@ const CREDENTIAL_CHECK_PATH = '/v1.0/credential-check';
  */
 const CHECK_TIMEOUT_MS = 10_000;
 
+/**
+ * Sent with the credential test, as on every capture (see USER_AGENT in
+ * nodes/SiteShot/capture.ts; a test keeps both equal to package.json).
+ */
+const USER_AGENT = 'n8n-nodes-siteshot/0.1.5 (n8n)';
+
 /** The one request that takes the header form, as an absolute URL. */
 const CREDENTIAL_CHECK_URL = `${API_BASE_URL}${CREDENTIAL_CHECK_PATH}`;
 
@@ -60,7 +66,7 @@ export class SiteShotApi implements ICredentialType {
 
 	displayName = 'Site-Shot API';
 
-	documentationUrl = 'https://www.site-shot.com/start/';
+	documentationUrl = 'https://www.site-shot.com/start/?utm_source=n8n&utm_medium=integration&utm_campaign=n8n_node';
 
 	icon = 'file:icons/SiteShot.svg' as const;
 
@@ -126,6 +132,7 @@ export class SiteShotApi implements ICredentialType {
 			baseURL: API_BASE_URL,
 			url: CREDENTIAL_CHECK_PATH,
 			method: 'GET',
+			headers: { 'User-Agent': USER_AGENT },
 			// No `timeout` here on purpose: n8n overwrites it. The bound lives in
 			// `authenticate` above.
 			//

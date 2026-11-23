@@ -17,6 +17,15 @@ export const API_ENDPOINT = 'https://api.site-shot.com/';
 
 export const CREDENTIALS_NAME = 'siteShotApi';
 
+/** This package's version. A test keeps it equal to package.json. */
+export const PACKAGE_VERSION = '0.1.5';
+
+/**
+ * Sent on every capture so Site-Shot can tell this node's traffic apart from
+ * n8n's generic HTTP Request node. Names the package and version only.
+ */
+export const USER_AGENT = `n8n-nodes-siteshot/${PACKAGE_VERSION} (n8n)`;
+
 /**
  * Client-side deadline handed to the n8n HTTP helper when no Delay is set.
  * Mirrors the SDK's budget: the API's own default render deadline (60s) plus

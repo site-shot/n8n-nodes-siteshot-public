@@ -5,7 +5,7 @@
 	"categories": ["Development"],
 	"alias": ["Screenshot", "Website Screenshot", "Web Page", "Capture", "Full Page", "Snapshot", "Thumbnail", "PNG"],
 	"resources": {
-		"credentialDocumentation": [{ "url": "https://www.site-shot.com/start/" }],
-		"primaryDocumentation": [{ "url": "https://www.site-shot.com/#documentation" }]
+		"credentialDocumentation": [{ "url": "https://www.site-shot.com/start/?utm_source=n8n&utm_medium=integration&utm_campaign=n8n_node" }],
+		"primaryDocumentation": [{ "url": "https://www.site-shot.com/?utm_source=n8n&utm_medium=integration&utm_campaign=n8n_node#documentation" }]
 	}
 }

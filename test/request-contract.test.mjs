@@ -45,7 +45,8 @@ test('auth is delegated to the siteShotApi credential, never built by the node',
 	const { credentialsType, requestOptions } = ctx.httpCalls[0];
 	assert.equal(credentialsType, 'siteShotApi');
 	assert.ok(!('userkey' in requestOptions.qs), 'node must not set userkey itself');
-	assert.equal(requestOptions.headers, undefined);
+	// The only header the node sets is its own User-Agent; the key is never one.
+	assert.deepEqual(Object.keys(requestOptions.headers), ['User-Agent']);
 	assert.equal(requestOptions.auth, undefined);
 });
 
@@ -319,4 +320,17 @@ test('no user-controlled field can override the endpoint, userkey or response_ty
 		Object.keys(requestOptions.qs).sort(),
 		['format', 'full_size', 'height', 'response_type', 'url', 'width'],
 	);
+});
+
+test('every capture names this package and version in the User-Agent', async () => {
+	const { readFileSync } = await import('node:fs');
+	const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+	const ctx = createExecuteContext({
+		params: { url: 'https://target.example/page', binaryPropertyName: 'data' },
+		transport: okPng(),
+	});
+
+	await run(ctx);
+
+	assert.equal(ctx.httpCalls[0].requestOptions.headers['User-Agent'], `n8n-nodes-siteshot/${pkg.version} (n8n)`);
 });

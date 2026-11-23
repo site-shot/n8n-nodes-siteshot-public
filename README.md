@@ -56,7 +56,7 @@ or later. The nodes panel and n8n Cloud install the version that n8n has
 verified, which can be older; if the node's **Options** offer no **Block Ads**,
 the installed version is older than 0.1.3. On self-hosted n8n, the instance
 owner can install it under **Settings → Community Nodes** by entering
-`n8n-nodes-siteshot@0.1.4`.
+`n8n-nodes-siteshot@0.1.5`.
 
 ## What it does
 
@@ -92,7 +92,7 @@ include the Site-Shot SDK.
 - **Self-hosted n8n otherwise:** the instance owner installs it under
   **Settings → Community Nodes** by entering the package name,
   `n8n-nodes-siteshot`. To install one exact version, add it to the name, for
-  example `n8n-nodes-siteshot@0.1.4`.
+  example `n8n-nodes-siteshot@0.1.5`.
 
 The nodes panel and n8n Cloud install the version that n8n has verified, which
 can lag behind npm. The options **Block Ads**, **Remove Cookie Banners** and
@@ -112,6 +112,9 @@ own code never reads it.
 
 - **Captures** send the key as the `userkey` query parameter, which is how the
   Site-Shot API authenticates a capture.
+- **Both** send the header `User-Agent: n8n-nodes-siteshot/<version> (n8n)`
+  (from version 0.1.5), so Site-Shot can tell this node's traffic from n8n's
+  generic HTTP Request node. It names the package and version only.
 - **The credential test** sends `GET https://api.site-shot.com/v1.0/credential-check`
   with the key in a `userkey` header, an empty query string and nothing else —
   no page address, body or account details. It never requests a screenshot.
@@ -153,7 +156,10 @@ embedded credentials (`https://user:pass@host/`) or control characters.
 ## Output
 
 Each input item produces one output item, paired with its input, with the input
-JSON unchanged and the screenshot in the binary field. For example, a workflow
+JSON unchanged and the screenshot in the binary field. From version 0.1.5, files
+that earlier nodes put on the item stay there; only the output field is set or
+replaced, so two Site-Shot nodes in a row (say `desktop` and `mobile`) leave
+both screenshots on the item. For example, a workflow
 **Manual Trigger → Site-Shot → (any node that takes a binary file)** with the
 defaults produces an item like this (abbreviated; n8n adds the file data and
 size):
@@ -212,7 +218,8 @@ upstream wording only when it matches a short list of known reasons (plus a
 used-up free plan's renewal date, when it has the exact `YYYY-MM-DD (UTC)`
 form); they never include the API key, the request address, headers or
 response bodies. The node writes no logs. With **Continue On Fail** enabled, a
-failed item keeps its input JSON and pairing and has no binary field. It gains
+failed item keeps its input JSON, its pairing and (from 0.1.5) the files of
+earlier nodes, and gets no screenshot. It gains
 `error` (the message), `errorReason` (a stable code such as `invalid_api_key`,
 `page_unreachable`, `parallel_limit` or `subscription_inactive`),
 `errorDescription` (what to do) and, when the API answered, `httpCode`.
@@ -252,6 +259,12 @@ Building, testing, the local runtime fixture and the release steps are in
 
 ## Version history
 
+- **0.1.5:** files that earlier nodes put on the item are kept: the node used to
+  replace the item's binary data with the screenshot alone, so a second
+  Site-Shot node dropped the first screenshot. Captures and the credential test
+  send `User-Agent: n8n-nodes-siteshot/0.1.5 (n8n)`. The documentation links
+  in the editor (credential docs and node docs) carry UTM parameters so visits
+  from n8n can be counted. Options, parameters and error messages are unchanged.
 - **0.1.4:** a search for "screenshot", "capture" or "full page" in the n8n
   nodes panel finds the node. The panel searches only a node's name and its
   codex aliases, and "Site-Shot" does not match "screenshot", so before this
