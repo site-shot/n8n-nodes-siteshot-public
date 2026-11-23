@@ -91,3 +91,124 @@ test('an item without files still gets only the screenshot, and a failed one get
 	const [badOut] = await run(bad);
 	assert.equal(badOut[0].binary, undefined);
 });
+
+test('new nodes are type version 1.1; workflows saved with version 1 keep loading', () => {
+	const { description } = new SiteShot();
+	assert.deepEqual(description.version, [1, 1.1]);
+	assert.equal(description.defaultVersion, undefined);
+});
+
+test('the screenshot is the first file on the item, ahead of the files it keeps', async () => {
+	const earlier = { data: 'kept', fileName: 'desktop.jpg', mimeType: 'image/jpeg' };
+	const ctx = createExecuteContext({
+		items: [{ json: {}, binary: { desktop: earlier, data: { data: 'old', fileName: 'old.png', mimeType: 'image/png' } } }],
+		params: { url: 'https://target.example/page', binaryPropertyName: 'data' },
+		transport: fullResponse({ image: PNG_B64 }),
+	});
+
+	const [output] = await run(ctx);
+
+	assert.deepEqual(Object.keys(output[0].binary), ['data', 'desktop']);
+	assert.notEqual(output[0].binary.data.data, 'old');
+});
+
+test('type version 1 keeps the 0.1.4 output: only the screenshot, and no file on failure', async () => {
+	const earlier = { data: 'kept', fileName: 'desktop.jpg', mimeType: 'image/jpeg' };
+	const ok = createExecuteContext({
+		typeVersion: 1,
+		items: [{ json: {}, binary: { desktop: earlier } }],
+		params: { url: 'https://target.example/page', binaryPropertyName: 'mobile' },
+		transport: fullResponse({ image: PNG_B64 }),
+	});
+	const [okOut] = await run(ok);
+	assert.deepEqual(Object.keys(okOut[0].binary), ['mobile']);
+
+	const bad = createExecuteContext({
+		typeVersion: 1,
+		items: [{ json: {}, binary: { desktop: earlier } }],
+		params: { url: 'https://target.example/page', binaryPropertyName: 'mobile' },
+		transport: fullResponse({ error: 'invalid authentication credentials' }, 401),
+		continueOnFail: true,
+	});
+	const [badOut] = await run(bad);
+	assert.ok(badOut[0].json.error);
+	assert.equal(badOut[0].binary, undefined);
+});
+
+test('with Continue On Fail, a failed capture never leaves an older file in its output field', async () => {
+	const stale = { data: 'stale', fileName: 'screenshot.png', mimeType: 'image/png' };
+	const other = { data: 'other', fileName: 'a.pdf', mimeType: 'application/pdf' };
+	const ctx = createExecuteContext({
+		items: [{ json: {}, binary: { data: stale, other } }],
+		params: { url: 'https://target.example/page', binaryPropertyName: 'data' },
+		transport: fullResponse({ error: 'invalid authentication credentials' }, 401),
+		continueOnFail: true,
+	});
+
+	const [output] = await run(ctx);
+
+	assert.ok(output[0].json.error);
+	assert.deepEqual(Object.keys(output[0].binary), ['other']);
+
+	const only = createExecuteContext({
+		items: [{ json: {}, binary: { data: stale } }],
+		params: { url: 'https://target.example/page', binaryPropertyName: 'data' },
+		transport: fullResponse({ error: 'invalid authentication credentials' }, 401),
+		continueOnFail: true,
+	});
+	const [onlyOut] = await run(only);
+	assert.equal(onlyOut[0].binary, undefined);
+});
+
+test('a failure before the request (bad URL) also drops the output field and keeps the rest', async () => {
+	const stale = { data: 'stale', fileName: 'screenshot.png', mimeType: 'image/png' };
+	const other = { data: 'other', fileName: 'a.pdf', mimeType: 'application/pdf' };
+	const ctx = createExecuteContext({
+		items: [{ json: {}, binary: { shot: stale, other } }],
+		params: { url: 'not a url', binaryPropertyName: 'shot' },
+		transport: fullResponse({ image: PNG_B64 }),
+		continueOnFail: true,
+	});
+
+	const [output] = await run(ctx);
+
+	assert.equal(ctx.httpCalls.length, 0);
+	assert.equal(output[0].json.errorReason, 'invalid_url');
+	assert.deepEqual(Object.keys(output[0].binary), ['other']);
+});
+
+test('each item keeps its own files, on success and on failure', async () => {
+	const fileA = { data: 'a', fileName: 'a.jpg', mimeType: 'image/jpeg' };
+	const fileB = { data: 'b', fileName: 'b.jpg', mimeType: 'image/jpeg' };
+	const items = [
+		{ json: { id: 1 }, binary: { a: fileA } },
+		{ json: { id: 2 }, binary: { b: fileB } },
+	];
+
+	const ok = createExecuteContext({
+		items,
+		params: { url: 'https://target.example/page', binaryPropertyName: 'shot' },
+		transport: [fullResponse({ image: PNG_B64 }), fullResponse({ image: PNG_B64 })],
+	});
+	const [okOut] = await run(ok);
+	assert.deepEqual(Object.keys(okOut[0].binary), ['shot', 'a']);
+	assert.deepEqual(Object.keys(okOut[1].binary), ['shot', 'b']);
+	assert.equal(okOut[0].binary.a, fileA);
+	assert.equal(okOut[1].binary.b, fileB);
+	assert.notEqual(okOut[0].binary, okOut[1].binary);
+
+	const bad = createExecuteContext({
+		items,
+		params: { url: 'https://target.example/page', binaryPropertyName: 'shot' },
+		transport: [
+			fullResponse({ error: 'invalid authentication credentials' }, 401),
+			fullResponse({ error: 'invalid authentication credentials' }, 401),
+		],
+		continueOnFail: true,
+	});
+	const [badOut] = await run(bad);
+	assert.deepEqual(Object.keys(badOut[0].binary), ['a']);
+	assert.deepEqual(Object.keys(badOut[1].binary), ['b']);
+	assert.deepEqual(badOut.map((i) => i.pairedItem), [{ item: 0 }, { item: 1 }]);
+	assert.notEqual(badOut[0].binary, items[0].binary);
+});

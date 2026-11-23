@@ -116,8 +116,8 @@ own code never reads it.
   (from version 0.1.5), so Site-Shot can tell this node's traffic from n8n's
   generic HTTP Request node. It names the package and version only.
 - **The credential test** sends `GET https://api.site-shot.com/v1.0/credential-check`
-  with the key in a `userkey` header, an empty query string and nothing else —
-  no page address, body or account details. It never requests a screenshot.
+  with the key in a `userkey` header, the User-Agent above and an empty query
+  string — no page address, body or account details. It never requests a screenshot.
   Each attempt times out after 10 seconds, redirects are not followed, and the
   key is only ever sent to `api.site-shot.com`.
 
@@ -156,10 +156,17 @@ embedded credentials (`https://user:pass@host/`) or control characters.
 ## Output
 
 Each input item produces one output item, paired with its input, with the input
-JSON unchanged and the screenshot in the binary field. From version 0.1.5, files
-that earlier nodes put on the item stay there; only the output field is set or
-replaced, so two Site-Shot nodes in a row (say `desktop` and `mobile`) leave
-both screenshots on the item. For example, a workflow
+JSON unchanged and the screenshot in the binary field.
+
+From package 0.1.5, a Site-Shot node added to a workflow is node version 1.1,
+and files that earlier nodes put on the item stay there: only the output field
+is set or replaced, so two Site-Shot nodes in a row (say `desktop` and `mobile`)
+leave both screenshots on the item. The screenshot is the item's first file, so
+a node that takes the first file (such as Respond to Webhook set to binary,
+automatic) still gets it; a node that takes every file (such as an AI Agent
+passing images on) gets the kept files too. Site-Shot nodes already saved in a
+workflow stay at version 1 and keep the old output, the screenshot alone; to
+switch one, add a new Site-Shot node in its place. For example, a workflow
 **Manual Trigger → Site-Shot → (any node that takes a binary file)** with the
 defaults produces an item like this (abbreviated; n8n adds the file data and
 size):
@@ -192,7 +199,7 @@ another endpoint and never returns a placeholder result. If you enable n8n's
 
 **A failure is never a screenshot.** A capture that fails while rendering is
 answered with HTTP 200, an `error` field and a placeholder image. The node reads
-`error` on every response and produces no binary field unless the response
+`error` on every response and never writes the output field unless the response
 holds a real image in the requested format. It also rejects missing, empty or
 malformed image data, an image in a format other than the one requested, and
 responses that are not the expected JSON.
@@ -218,8 +225,9 @@ upstream wording only when it matches a short list of known reasons (plus a
 used-up free plan's renewal date, when it has the exact `YYYY-MM-DD (UTC)`
 form); they never include the API key, the request address, headers or
 response bodies. The node writes no logs. With **Continue On Fail** enabled, a
-failed item keeps its input JSON, its pairing and (from 0.1.5) the files of
-earlier nodes, and gets no screenshot. It gains
+failed item keeps its input JSON and its pairing, and never has the output
+field: at node version 1.1 it keeps the other files of earlier nodes but drops
+any older file in the output field, and at version 1 it has no files. It gains
 `error` (the message), `errorReason` (a stable code such as `invalid_api_key`,
 `page_unreachable`, `parallel_limit` or `subscription_inactive`),
 `errorDescription` (what to do) and, when the API answered, `httpCode`.
@@ -259,9 +267,11 @@ Building, testing, the local runtime fixture and the release steps are in
 
 ## Version history
 
-- **0.1.5:** files that earlier nodes put on the item are kept: the node used to
-  replace the item's binary data with the screenshot alone, so a second
-  Site-Shot node dropped the first screenshot. Captures and the credential test
+- **0.1.5:** node version 1.1, used by new Site-Shot nodes, keeps the files
+  that earlier nodes put on the item, with the screenshot first: version 1
+  replaced the item's binary data with the screenshot alone, so a second
+  Site-Shot node dropped the first screenshot. Nodes already saved at version 1
+  behave as before. A failed item never carries a file in the output field. Captures and the credential test
   send `User-Agent: n8n-nodes-siteshot/0.1.5 (n8n)`. The documentation links
   in the editor (credential docs and node docs) carry UTM parameters so visits
   from n8n can be counted. Options, parameters and error messages are unchanged.

@@ -101,6 +101,7 @@ export function createExecuteContext({
 	params = {},
 	transport,
 	continueOnFail = false,
+	typeVersion = 1.1,
 } = {}) {
 	const httpCalls = [];
 	const binaryCalls = [];
@@ -130,7 +131,7 @@ export function createExecuteContext({
 		},
 
 		getNode() {
-			return { id: 'test-node-id', name: 'Site-Shot', type: NODE_TYPE, typeVersion: 1, position: [0, 0], parameters: {} };
+			return { id: 'test-node-id', name: 'Site-Shot', type: NODE_TYPE, typeVersion, position: [0, 0], parameters: {} };
 		},
 
 		continueOnFail() {

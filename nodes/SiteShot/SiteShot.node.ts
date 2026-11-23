@@ -1,4 +1,5 @@
 import type {
+	IBinaryKeyData,
 	IDataObject,
 	IExecuteFunctions,
 	INodeExecutionData,
@@ -24,6 +25,26 @@ import {
 	type CaptureOptions,
 } from './capture';
 
+/** The item's files without `field`. */
+function withoutField(binary: IBinaryKeyData | undefined, field: string): IBinaryKeyData {
+	const kept: IBinaryKeyData = { ...(binary ?? {}) };
+	delete kept[field];
+	return kept;
+}
+
+/**
+ * The output field for an item, read again on failure: the capture may have
+ * failed before it was read, and reading it can itself throw.
+ */
+function outputFieldOf(ctx: IExecuteFunctions, itemIndex: number): string {
+	try {
+		const name = ctx.getNodeParameter('binaryPropertyName', itemIndex, 'data');
+		return typeof name === 'string' ? name : 'data';
+	} catch {
+		return 'data';
+	}
+}
+
 /** Reasons that are the user's own input, not something the API said. */
 const INPUT_REASONS = new Set(['invalid_url', 'invalid_options']);
 
@@ -33,7 +54,9 @@ export class SiteShot implements INodeType {
 		name: 'siteShot',
 		icon: { light: 'file:siteShot.svg', dark: 'file:siteShot.dark.svg' },
 		group: ['transform'],
-		version: 1,
+		// 1.1 keeps files from earlier nodes. Workflows saved with 1 keep the old
+		// output (only the screenshot) so an upgrade never changes what they do.
+		version: [1, 1.1],
 		description: 'Capture a screenshot of a public web page with Site-Shot',
 		subtitle: '={{$parameter["url"]}}',
 		defaults: { name: 'Site-Shot' },
@@ -141,6 +164,7 @@ export class SiteShot implements INodeType {
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 		const output: INodeExecutionData[] = [];
+		const keepInputFiles = this.getNode().typeVersion >= 1.1;
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			// Named in a timeout failure, so it is known before the request goes out.
@@ -192,16 +216,17 @@ export class SiteShot implements INodeType {
 
 				output.push({
 					json: items[itemIndex].json,
-					// Files from earlier nodes stay on the item; only the output field
-					// is set (or replaced) by this capture.
+					// From 1.1, files from earlier nodes stay on the item. The screenshot
+					// comes first, so a node that takes an item's first file (Respond to
+					// Webhook, automatic) still gets it.
 					binary: {
-						...(items[itemIndex].binary ?? {}),
 						[binaryPropertyName]: await this.helpers.prepareBinaryData.call(
 							this,
 							buffer,
 							spec.fileName,
 							spec.mimeType,
 						),
+						...(keepInputFiles ? withoutField(items[itemIndex].binary, binaryPropertyName) : {}),
 					},
 					pairedItem: { item: itemIndex },
 				});
@@ -221,8 +246,13 @@ export class SiteShot implements INodeType {
 						json: { ...items[itemIndex].json, ...details },
 						pairedItem: { item: itemIndex },
 					};
-					// Files from earlier nodes stay on the item on failure too.
-					if (items[itemIndex].binary) failed.binary = items[itemIndex].binary;
+					// From 1.1, files from earlier nodes stay on a failed item too, but
+					// never one in the output field: a failure must not look like a
+					// screenshot.
+					if (keepInputFiles) {
+						const kept = withoutField(items[itemIndex].binary, outputFieldOf(this, itemIndex));
+						if (Object.keys(kept).length > 0) failed.binary = kept;
+					}
 					output.push(failed);
 					continue;
 				}
